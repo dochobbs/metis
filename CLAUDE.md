@@ -1,6 +1,6 @@
 # CLAUDE.md - Metis Development Context
 
-**Last Updated:** December 2025
+**Last Updated:** April 2026
 
 This file provides context for AI assistants working on Metis.
 
@@ -21,7 +21,7 @@ Named after Metis, Greek goddess of wisdom and counsel.
 cd /Users/dochobbs/Downloads/Consult/MedEd/metis/scripts
 ./start-all.sh
 
-# Portal at http://localhost:3000
+# Portal at http://localhost:9100
 
 # Check status
 ./status.sh
@@ -83,19 +83,19 @@ metis/
 |-------|-----------|---------------|
 | `/` | Dashboard | - |
 | `/login` | Login | - |
-| `/oread/*` | - | http://localhost:8004 |
-| `/syrinx/*` | - | http://localhost:8003 |
-| `/mneme/*` | - | http://localhost:8002 |
-| `/echo/*` | - | http://localhost:8001 |
+| `/oread/*` | - | http://localhost:9104 |
+| `/syrinx/*` | - | http://localhost:9103 |
+| `/mneme/*` | - | http://localhost:9102 |
+| `/echo/*` | - | http://localhost:9101 |
 
 ### Vite Proxy Configuration (Updated February 2026)
 
 ```typescript
 // portal/vite.config.ts — actual current config
-'/api/oread'  → localhost:8004, rewrite to '/api'
-'/api/syrinx' → localhost:8003, rewrite to '/api'
-'/api/mneme'  → localhost:8002, rewrite to '/api'
-'/api/echo'   → localhost:8001, rewrite to ''     ← Echo has NO /api/ prefix
+'/api/oread'  → localhost:9104, rewrite to '/api'
+'/api/syrinx' → localhost:9103, rewrite to '/api'
+'/api/mneme'  → localhost:9102, rewrite to '/api'
+'/api/echo'   → localhost:9101, rewrite to ''     ← Echo has NO /api/ prefix
 ```
 
 **Gotcha:** Echo routes (`/question`, `/feedback`, `/debrief`, `/health`) lack `/api/` prefix. The Echo proxy rewrites to `''` (empty string), not `'/api'`. All other services rewrite to `'/api'`.
@@ -177,12 +177,13 @@ class Condition(BaseModel):
 
 | Service | Port | Project |
 |---------|------|---------|
-| Oread | 8004 | synpat |
-| Syrinx | 8003 | synvoice |
-| Mneme Backend | 8002 | synchart/backend |
-| Echo | 8001 | echo |
+| Oread | 9104 | synpat |
+| Syrinx | 9103 | synvoice |
+| Mneme Backend | 9102 | synchart/backend |
+| Echo | 9101 | echo |
 | Mneme Frontend | 5173 | synchart/frontend |
-| **Metis Portal** | 3000 | metis/portal |
+| **Metis Portal** | 9100 | metis/portal |
+| Athena | 9105 | athena |
 
 ## Environment Variables
 
@@ -198,7 +199,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...
 ```bash
 cd portal
 npm install
-npm run dev          # Dev server at :3000
+npm run dev          # Dev server at :9100
 npm run build        # Production build
 ```
 
@@ -229,7 +230,7 @@ mode = os.environ.get("METIS_MODE", "standalone")
 
 if mode == "ecosystem":
     # Restricted CORS, required auth, progress tracking
-    cors_origins = ["http://localhost:3000"]
+    cors_origins = ["http://localhost:9100"]
     auth_required = True
 else:
     # Permissive CORS, optional auth
@@ -264,11 +265,11 @@ cd syrinx     # Same as cd synvoice
 
 | Project | Path | Port |
 |---------|------|------|
-| **Oread** | `synpat/` | 8004 |
-| **Syrinx** | `synvoice/` | 8003 |
-| **Mneme** | `synchart/` | 8002 |
-| **Echo** | `echo/` | 8001 |
-| **Athena** | `athena/` | (workspace) |
+| **Oread** | `synpat/` | 9104 |
+| **Syrinx** | `synvoice/` | 9103 |
+| **Mneme** | `synchart/` | 9102 |
+| **Echo** | `echo/` | 9101 |
+| **Athena** | `athena/` | 9105 |
 
 ## Code Style
 
