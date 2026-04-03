@@ -1,0 +1,296 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://meded.dev/schemas/clinical.schema.json",
+  "title": "MedEd Clinical Models",
+  "description": "Shared clinical data models matching Oread's patient.py definitions",
+  "definitions": {
+    "CodeableConcept": {
+      "type": "object",
+      "description": "A coded concept with system, code, and display text",
+      "required": ["system", "code", "display"],
+      "properties": {
+        "system": {
+          "type": "string",
+          "description": "The coding system (e.g., ICD-10, SNOMED, LOINC, RxNorm)"
+        },
+        "code": {
+          "type": "string",
+          "description": "The code value"
+        },
+        "display": {
+          "type": "string",
+          "description": "Human-readable display text"
+        }
+      }
+    },
+    "ConditionStatus": {
+      "type": "string",
+      "enum": ["active", "recurrence", "relapse", "inactive", "remission", "resolved"],
+      "default": "active"
+    },
+    "VerificationStatus": {
+      "type": "string",
+      "enum": ["confirmed", "provisional", "differential", "refuted", "unconfirmed"],
+      "default": "confirmed"
+    },
+    "Severity": {
+      "type": "string",
+      "enum": ["mild", "moderate", "severe"]
+    },
+    "Condition": {
+      "type": "object",
+      "description": "A medical condition/diagnosis (matches Oread patient.py:569)",
+      "required": ["id", "code", "display_name", "onset_date"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier"
+        },
+        "code": {
+          "$ref": "#/definitions/CodeableConcept"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Human-readable condition name"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["problem", "health-concern", "diagnosis", "encounter-diagnosis"],
+          "default": "diagnosis"
+        },
+        "clinical_status": {
+          "$ref": "#/definitions/ConditionStatus"
+        },
+        "verification_status": {
+          "$ref": "#/definitions/VerificationStatus"
+        },
+        "severity": {
+          "$ref": "#/definitions/Severity"
+        },
+        "onset_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Date condition was first noted"
+        },
+        "onset_age_description": {
+          "type": "string",
+          "description": "Human-readable age at onset (e.g., '6 months old')"
+        },
+        "abatement_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Date condition resolved/abated"
+        },
+        "recorded_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Date condition was recorded"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional clinical notes"
+        },
+        "diagnosed_by": {
+          "type": "string",
+          "description": "Provider who diagnosed"
+        },
+        "caused_by": {
+          "type": "string",
+          "description": "ID of causing condition"
+        },
+        "complications": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of complication conditions"
+        }
+      }
+    },
+    "MedicationStatus": {
+      "type": "string",
+      "enum": ["active", "completed", "stopped", "on-hold"],
+      "default": "active"
+    },
+    "DoseChange": {
+      "type": "object",
+      "description": "Record of a medication dose change",
+      "required": ["date", "previous_dose", "new_dose"],
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "previous_dose": {
+          "type": "string"
+        },
+        "new_dose": {
+          "type": "string"
+        }
+      }
+    },
+    "Medication": {
+      "type": "object",
+      "description": "A medication on the patient's list (matches Oread patient.py:609)",
+      "required": ["id", "code", "display_name", "dose_quantity", "dose_unit", "frequency", "start_date"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier"
+        },
+        "code": {
+          "$ref": "#/definitions/CodeableConcept"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Medication name"
+        },
+        "status": {
+          "$ref": "#/definitions/MedicationStatus"
+        },
+        "dose_quantity": {
+          "type": "string",
+          "description": "Dose amount (e.g., '500')"
+        },
+        "dose_unit": {
+          "type": "string",
+          "description": "Dose unit (e.g., 'mg')"
+        },
+        "frequency": {
+          "type": "string",
+          "description": "Dosing frequency (e.g., 'BID', 'Q6H')"
+        },
+        "route": {
+          "type": "string",
+          "description": "Route of administration",
+          "default": "oral"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Additional dosing instructions"
+        },
+        "prn": {
+          "type": "boolean",
+          "default": false,
+          "description": "As-needed medication"
+        },
+        "prn_reason": {
+          "type": "string",
+          "description": "Reason for PRN use"
+        },
+        "start_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "prescribed_at_encounter": {
+          "type": "string",
+          "description": "Encounter ID where prescribed"
+        },
+        "indication": {
+          "type": "string",
+          "description": "Reason for medication"
+        },
+        "indication_condition_id": {
+          "type": "string",
+          "description": "ID of associated condition"
+        },
+        "prescriber": {
+          "type": "string"
+        },
+        "pharmacy": {
+          "type": "string"
+        },
+        "refills_remaining": {
+          "type": "integer"
+        },
+        "dose_changes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/DoseChange" }
+        },
+        "discontinuation_reason": {
+          "type": "string"
+        }
+      }
+    },
+    "AllergyCategory": {
+      "type": "string",
+      "enum": ["food", "medication", "environment", "biologic"]
+    },
+    "AllergyReactionType": {
+      "type": "string",
+      "enum": ["allergy", "intolerance"],
+      "default": "allergy"
+    },
+    "AllergyReaction": {
+      "type": "object",
+      "description": "A reaction manifestation for an allergy",
+      "required": ["manifestation"],
+      "properties": {
+        "manifestation": {
+          "type": "string",
+          "description": "How the allergy manifests (rash, swelling, etc.)"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["mild", "moderate", "severe", "life-threatening"]
+        }
+      }
+    },
+    "Allergy": {
+      "type": "object",
+      "description": "An allergy or intolerance (matches Oread patient.py:648)",
+      "required": ["id", "display_name", "category"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier"
+        },
+        "code": {
+          "$ref": "#/definitions/CodeableConcept"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Allergen name"
+        },
+        "category": {
+          "$ref": "#/definitions/AllergyCategory"
+        },
+        "type": {
+          "$ref": "#/definitions/AllergyReactionType"
+        },
+        "criticality": {
+          "type": "string",
+          "enum": ["low", "high", "unable-to-assess"],
+          "default": "low"
+        },
+        "reactions": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/AllergyReaction" }
+        },
+        "onset_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "recorded_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "clinical_status": {
+          "type": "string",
+          "enum": ["active", "inactive", "resolved"],
+          "default": "active"
+        },
+        "verification_status": {
+          "type": "string",
+          "enum": ["confirmed", "unconfirmed", "refuted", "entered-in-error"],
+          "default": "confirmed"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

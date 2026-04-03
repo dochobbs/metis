@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+  font-family: 'Work Sans', -apple-system, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Crimson Pro', Georgia, serif;
+}
+
+code, pre {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Tool card hover effects */
+.tool-card {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+.tool-card:hover {
+  @apply -translate-y-1 shadow-lg;
+}
+
+/* Status indicators */
+.status-dot {
+  @apply w-2 h-2 rounded-full;
+}
+
+.status-dot.online {
+  @apply bg-green-500 animate-pulse;
+}
+
+.status-dot.offline {
+  @apply bg-red-500;
+}
+
+.status-dot.unknown {
+  @apply bg-gray-400;
+}

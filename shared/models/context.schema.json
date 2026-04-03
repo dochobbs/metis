@@ -1,0 +1,187 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://meded.dev/schemas/context.schema.json",
+  "title": "MedEd Context Models",
+  "description": "Shared context models for cross-platform communication",
+  "definitions": {
+    "EncounterSummary": {
+      "type": "object",
+      "description": "Brief encounter summary for context",
+      "required": ["date", "type", "chief_complaint"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Encounter ID"
+        },
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "type": {
+          "type": "string",
+          "description": "Encounter type (acute, well-child, follow-up, etc.)"
+        },
+        "chief_complaint": {
+          "type": "string"
+        },
+        "diagnoses": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Diagnosis display names"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Brief encounter notes"
+        }
+      }
+    },
+    "PatientContext": {
+      "type": "object",
+      "description": "Shared patient context passed between platforms",
+      "required": ["patient_id", "source", "name"],
+      "properties": {
+        "patient_id": {
+          "type": "string",
+          "description": "Unique patient identifier"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["oread", "syrinx", "mneme"],
+          "description": "Which platform the context came from"
+        },
+        "name": {
+          "type": "string",
+          "description": "Patient full name"
+        },
+        "date_of_birth": {
+          "type": "string",
+          "format": "date"
+        },
+        "age_years": {
+          "type": "integer"
+        },
+        "age_months": {
+          "type": "integer",
+          "description": "Total age in months (for pediatrics)"
+        },
+        "sex": {
+          "type": "string",
+          "enum": ["male", "female", "other", "unknown"]
+        },
+        "problem_list": {
+          "type": "array",
+          "items": { "$ref": "clinical.schema.json#/definitions/Condition" },
+          "description": "Active conditions"
+        },
+        "medication_list": {
+          "type": "array",
+          "items": { "$ref": "clinical.schema.json#/definitions/Medication" },
+          "description": "Current medications"
+        },
+        "allergy_list": {
+          "type": "array",
+          "items": { "$ref": "clinical.schema.json#/definitions/Allergy" },
+          "description": "Known allergies"
+        },
+        "recent_encounters": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/EncounterSummary" },
+          "description": "Recent encounter summaries"
+        },
+        "family_history": {
+          "type": "string",
+          "description": "Brief family history summary"
+        },
+        "social_history": {
+          "type": "string",
+          "description": "Brief social history summary"
+        }
+      }
+    },
+    "ScriptLine": {
+      "type": "object",
+      "description": "A line of dialogue in an encounter script",
+      "required": ["speaker", "text"],
+      "properties": {
+        "speaker": {
+          "type": "string",
+          "description": "Who is speaking (doctor, parent, child, etc.)"
+        },
+        "text": {
+          "type": "string",
+          "description": "What was said"
+        },
+        "direction": {
+          "type": "string",
+          "description": "Stage direction (e.g., 'anxious', 'reassuring')"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Timestamp in seconds (if from audio)"
+        }
+      }
+    },
+    "InjectedError": {
+      "type": "object",
+      "description": "An error injected into an encounter for training",
+      "required": ["category", "type"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["clinical", "communication", "documentation"],
+          "description": "Error category"
+        },
+        "type": {
+          "type": "string",
+          "description": "Specific error type (e.g., 'missed-allergy')"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the injected error"
+        }
+      }
+    },
+    "EncounterContext": {
+      "type": "object",
+      "description": "Context for a specific encounter (from Syrinx)",
+      "required": ["encounter_id", "patient", "chief_complaint"],
+      "properties": {
+        "encounter_id": {
+          "type": "string"
+        },
+        "patient": {
+          "$ref": "#/definitions/PatientContext"
+        },
+        "chief_complaint": {
+          "type": "string"
+        },
+        "encounter_type": {
+          "type": "string",
+          "enum": ["acute", "well-child", "mental-health", "follow-up", "newborn"]
+        },
+        "script": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ScriptLine" },
+          "description": "Dialogue script from Syrinx"
+        },
+        "errors_injected": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/InjectedError" },
+          "description": "Errors injected for training"
+        },
+        "source": {
+          "type": "string",
+          "const": "syrinx"
+        },
+        "duration_tier": {
+          "type": "string",
+          "enum": ["short", "medium", "long"],
+          "description": "Expected encounter duration"
+        }
+      }
+    }
+  }
+}
