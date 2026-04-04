@@ -34,11 +34,20 @@ interface EchoMessage {
 }
 
 const services: Omit<ServiceStatus, 'status'>[] = [
-  { name: 'Oread', id: 'oread', port: 8004, color: 'emerald' },
-  { name: 'Syrinx', id: 'syrinx', port: 8003, color: 'violet' },
-  { name: 'Mneme', id: 'mneme', port: 8002, color: 'amber' },
-  { name: 'Echo', id: 'echo', port: 8001, color: 'cyan' },
+  { name: 'Athena', id: 'athena', port: 9105, color: 'indigo' },
+  { name: 'Oread', id: 'oread', port: 9104, color: 'emerald' },
+  { name: 'Syrinx', id: 'syrinx', port: 9103, color: 'violet' },
+  { name: 'Mneme', id: 'mneme', port: 9102, color: 'amber' },
+  { name: 'Echo', id: 'echo', port: 9101, color: 'cyan' },
 ]
+
+type Specialty = 'pediatrics' | 'internal_medicine' | 'family_practice'
+
+const specialtyLabels: Record<Specialty, string> = {
+  pediatrics: 'Pediatrics',
+  internal_medicine: 'Internal Medicine',
+  family_practice: 'Family Practice',
+}
 
 export default function Dashboard({ session }: DashboardProps) {
   // Service status
@@ -50,6 +59,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedPatient, setGeneratedPatient] = useState<GeneratedPatient | null>(null)
   const [patientAge, setPatientAge] = useState('24') // months
+  const [specialty, setSpecialty] = useState<Specialty>('pediatrics')
   const [generateError, setGenerateError] = useState<string | null>(null)
 
   // Echo chat
@@ -64,7 +74,8 @@ export default function Dashboard({ session }: DashboardProps) {
         try {
           const controller = new AbortController()
           const timeout = setTimeout(() => controller.abort(), 2000)
-          const res = await fetch(`http://localhost:${service.port}/health`, {
+          const healthPath = service.id === 'athena' ? '/api/health' : '/health'
+          const res = await fetch(`http://localhost:${service.port}${healthPath}`, {
             signal: controller.signal,
           }).catch(() => fetch(`http://localhost:${service.port}/`))
           clearTimeout(timeout)
@@ -95,7 +106,7 @@ export default function Dashboard({ session }: DashboardProps) {
       const res = await fetch('/api/oread/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ age_months: ageMonths }),
+        body: JSON.stringify({ age_months: ageMonths, specialty }),
       })
 
       if (!res.ok) throw new Error('Generation failed')
@@ -237,7 +248,7 @@ export default function Dashboard({ session }: DashboardProps) {
     } catch {
       setEchoMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, I couldn\'t process that. Make sure Echo is running on port 8001.',
+        content: 'Sorry, I couldn\'t process that. Make sure Echo is running on port 9101.',
       }])
     } finally {
       setIsEchoLoading(false)
@@ -309,38 +320,64 @@ export default function Dashboard({ session }: DashboardProps) {
             {!isOreadOnline ? (
               <div className="flex items-center gap-3 p-4 bg-red-50 text-red-700 rounded-lg">
                 <AlertCircle className="w-5 h-5" />
-                <span className="text-sm">Oread is offline. Start it on port 8004.</span>
+                <span className="text-sm">Oread is offline. Start it on port 9104.</span>
               </div>
             ) : (
               <>
-                <div className="flex gap-3">
-                  <div className="flex-1">
+                <div className="space-y-3">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Patient Age (months)
+                      Specialty
                     </label>
-                    <input
-                      type="number"
-                      value={patientAge}
-                      onChange={(e) => setPatientAge(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="24"
-                      min="0"
-                      max="216"
-                    />
+                    <div className="flex gap-2">
+                      {(Object.entries(specialtyLabels) as [Specialty, string][]).map(([key, label]) => (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            setSpecialty(key)
+                            if (key === 'internal_medicine' && parseInt(patientAge) < 216) setPatientAge('360')
+                            if (key === 'pediatrics' && parseInt(patientAge) > 216) setPatientAge('60')
+                          }}
+                          className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                            specialty === key
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-emerald-400'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex items-end">
-                    <button
-                      onClick={handleGenerate}
-                      disabled={isGenerating}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                      {isGenerating ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-4 h-4" />
-                      )}
-                      Generate
-                    </button>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Patient Age (months)
+                      </label>
+                      <input
+                        type="number"
+                        value={patientAge}
+                        onChange={(e) => setPatientAge(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        placeholder="24"
+                        min="0"
+                        max={specialty === 'pediatrics' ? '216' : '1200'}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        onClick={handleGenerate}
+                        disabled={isGenerating}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {isGenerating ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-4 h-4" />
+                        )}
+                        Generate
+                      </button>
+                    </div>
                   </div>
                 </div>
 
