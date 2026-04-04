@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Session } from '@supabase/supabase-js'
 import {
-  User, Mic, FileText, MessageCircle, Send, RefreshCw,
+  Mic, FileText, Send, RefreshCw,
   Sparkles, ArrowRight, ExternalLink, Loader2, CheckCircle2,
   AlertCircle, Baby, Stethoscope, ClipboardList
 } from 'lucide-react'
@@ -43,31 +43,52 @@ const services: Omit<ServiceStatus, 'status'>[] = [
 
 type Specialty = 'pediatrics' | 'internal_medicine' | 'family_practice'
 
-const specialtyLabels: Record<Specialty, string> = {
-  pediatrics: 'Pediatrics',
-  internal_medicine: 'Internal Medicine',
-  family_practice: 'Family Practice',
+const specialtyConfig = {
+  pediatrics: {
+    label: 'PEDS',
+    count: '46',
+    accent: 'text-teal-700',
+    accentBg: 'bg-teal-700',
+    accentLight: 'bg-teal-50',
+    accentBorder: 'border-teal-300',
+    dotColor: 'bg-teal-500',
+  },
+  internal_medicine: {
+    label: 'IM',
+    count: '181',
+    accent: 'text-indigo-700',
+    accentBg: 'bg-indigo-700',
+    accentLight: 'bg-indigo-50',
+    accentBorder: 'border-indigo-300',
+    dotColor: 'bg-indigo-500',
+  },
+  family_practice: {
+    label: 'FP',
+    count: '213',
+    accent: 'text-amber-700',
+    accentBg: 'bg-amber-700',
+    accentLight: 'bg-amber-50',
+    accentBorder: 'border-amber-300',
+    dotColor: 'bg-amber-500',
+  },
 }
 
 export default function Dashboard({ session }: DashboardProps) {
-  // Service status
   const [statuses, setStatuses] = useState<ServiceStatus[]>(
     services.map(s => ({ ...s, status: 'checking' }))
   )
-
-  // Patient generation
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedPatient, setGeneratedPatient] = useState<GeneratedPatient | null>(null)
-  const [patientAge, setPatientAge] = useState('24') // months
+  const [patientAge, setPatientAge] = useState('24')
   const [specialty, setSpecialty] = useState<Specialty>('pediatrics')
   const [generateError, setGenerateError] = useState<string | null>(null)
-
-  // Echo chat
   const [echoMessages, setEchoMessages] = useState<EchoMessage[]>([])
   const [echoInput, setEchoInput] = useState('')
   const [isEchoLoading, setIsEchoLoading] = useState(false)
+  const [isSendingMneme, setIsSendingMneme] = useState(false)
+  const [isSendingSyrinx, setIsSendingSyrinx] = useState(false)
+  const echoEndRef = useRef<HTMLDivElement>(null)
 
-  // Status checking
   const checkStatuses = useCallback(async () => {
     const updated = await Promise.all(
       services.map(async (service) => {
@@ -94,13 +115,15 @@ export default function Dashboard({ session }: DashboardProps) {
     return () => clearInterval(interval)
   }, [checkStatuses])
 
-  // Generate patient via Oread's synchronous endpoint (proxied through Vite)
+  useEffect(() => {
+    echoEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [echoMessages])
+
   const handleGenerate = async () => {
     setIsGenerating(true)
     setGenerateError(null)
     setGeneratedPatient(null)
     setEchoMessages([])
-
     try {
       const ageMonths = parseInt(patientAge)
       const res = await fetch('/api/oread/generate', {
@@ -108,9 +131,7 @@ export default function Dashboard({ session }: DashboardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ age_months: ageMonths, specialty }),
       })
-
       if (!res.ok) throw new Error('Generation failed')
-
       const data = await res.json()
       setGeneratedPatient({
         patient_id: data.id,
@@ -128,444 +149,270 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   }
 
-  // Send to Mneme: fetch full patient JSON from Oread, POST to Mneme import
-  const [isSendingMneme, setIsSendingMneme] = useState(false)
-  const [isSendingSyrinx, setIsSendingSyrinx] = useState(false)
-
   const sendToMneme = async () => {
     if (!generatedPatient) return
     setIsSendingMneme(true)
     try {
-      // Fetch full patient record from Oread
       const patientRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}?format=json`)
       if (!patientRes.ok) throw new Error('Failed to fetch patient from Oread')
       const patientData = await patientRes.json()
-
-      // POST to Mneme's JSON import endpoint
       const importRes = await fetch('/api/mneme/import/oread/json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patientData),
       })
-
       if (importRes.ok) {
         const result = await importRes.json()
         const mnemePatientId = result.details?.patient_id
-        window.open(
-          mnemePatientId
-            ? `http://localhost:5173/patients/${mnemePatientId}`
-            : 'http://localhost:5173',
-          '_blank'
-        )
-      } else {
-        // Fallback: open Mneme import page
-        window.open('http://localhost:5173/import', '_blank')
-      }
-    } catch {
-      window.open('http://localhost:5173/import', '_blank')
-    } finally {
-      setIsSendingMneme(false)
-    }
+        window.open(mnemePatientId ? `http://localhost:5173/patients/${mnemePatientId}` : 'http://localhost:5173', '_blank')
+      } else { window.open('http://localhost:5173/import', '_blank') }
+    } catch { window.open('http://localhost:5173/import', '_blank') }
+    finally { setIsSendingMneme(false) }
   }
 
-  // Send to Syrinx: fetch full patient JSON from Oread, POST to Syrinx import
   const sendToSyrinx = async () => {
     if (!generatedPatient) return
     setIsSendingSyrinx(true)
     try {
-      // Fetch full patient record from Oread
       const patientRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}?format=json`)
       if (!patientRes.ok) throw new Error('Failed to fetch patient from Oread')
       const patientData = await patientRes.json()
-
-      // POST to Syrinx's import endpoint
       const importRes = await fetch('/api/syrinx/patients/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patientData),
       })
-
-      if (importRes.ok) {
-        window.open('http://localhost:9103', '_blank')
-      } else {
-        window.open('http://localhost:9103', '_blank')
-      }
-    } catch {
       window.open('http://localhost:9103', '_blank')
-    } finally {
-      setIsSendingSyrinx(false)
-    }
+    } catch { window.open('http://localhost:9103', '_blank') }
+    finally { setIsSendingSyrinx(false) }
   }
 
-  // Echo chat: fetch PatientContext from Oread and send to Echo /question
   const sendToEcho = async () => {
     if (!echoInput.trim()) return
-
     const userMessage = echoInput.trim()
     setEchoMessages(prev => [...prev, { role: 'user', content: userMessage }])
     setEchoInput('')
     setIsEchoLoading(true)
-
     try {
-      const payload: Record<string, unknown> = {
-        learner_question: userMessage,
-        learner_level: 'student',
-      }
-
-      // Fetch full PatientContext from Oread's /context endpoint
+      const payload: Record<string, unknown> = { learner_question: userMessage, learner_level: 'student' }
       if (generatedPatient) {
         try {
           const ctxRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}/context`)
-          if (ctxRes.ok) {
-            payload.patient = await ctxRes.json()
-          }
+          if (ctxRes.ok) { payload.patient = await ctxRes.json() }
         } catch {
-          // Fallback: build minimal context from local data
           payload.patient = {
-            patient_id: generatedPatient.patient_id,
-            source: 'oread',
-            name: generatedPatient.name,
-            age_months: generatedPatient.age_months,
-            sex: generatedPatient.sex,
+            patient_id: generatedPatient.patient_id, source: 'oread',
+            name: generatedPatient.name, age_months: generatedPatient.age_months, sex: generatedPatient.sex,
             problem_list: generatedPatient.conditions?.map(c => ({ display_name: c, is_active: true })) || [],
           }
         }
       }
-
       const res = await fetch('/api/echo/question', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       })
-
       if (!res.ok) throw new Error('Echo request failed')
-
       const data = await res.json()
       setEchoMessages(prev => [...prev, {
-        role: 'assistant',
-        content: data.question || data.response || data.feedback || 'I received your question.',
+        role: 'assistant', content: data.question || data.response || data.feedback || 'I received your question.',
       }])
     } catch {
-      setEchoMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Sorry, I couldn\'t process that. Make sure Echo is running on port 9101.',
-      }])
-    } finally {
-      setIsEchoLoading(false)
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    if (status === 'online') return 'bg-green-500'
-    if (status === 'offline') return 'bg-red-500'
-    return 'bg-gray-400 animate-pulse'
+      setEchoMessages(prev => [...prev, { role: 'assistant', content: 'Echo offline — start on port 9101.' }])
+    } finally { setIsEchoLoading(false) }
   }
 
   const isOreadOnline = statuses.find(s => s.id === 'oread')?.status === 'online'
   const isEchoOnline = statuses.find(s => s.id === 'echo')?.status === 'online'
+  const onlineCount = statuses.filter(s => s.status === 'online').length
+  const sc = specialtyConfig[specialty]
 
   return (
-    <div className="space-y-8">
-      {/* Header with status */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">MedEd Platform</h1>
-          <p className="mt-1 text-gray-600">
-            {session ? 'Welcome back!' : 'Generate patients, practice, and learn.'}
-          </p>
+    <div className="max-w-[1080px] mx-auto px-6 py-5">
+
+      {/* ── Top Bar ── */}
+      <div className="flex items-center justify-between pb-3 mb-5 border-b border-stone-300">
+        <div className="flex items-baseline gap-2">
+          <span className="text-[14px] font-semibold tracking-[0.12em] uppercase text-stone-800">MEDED</span>
+          <span className="text-[10px] text-stone-400 tracking-widest">v2</span>
         </div>
-        <button
-          onClick={checkStatuses}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-4">
+          {statuses.map(s => (
+            <a key={s.id}
+              href={`http://localhost:${s.id === 'mneme' ? 5173 : s.port}`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 group"
+            >
+              <span className={`w-[6px] h-[6px] rounded-full ${
+                s.status === 'online' ? 'bg-stone-800' : 'bg-stone-300'
+              }`} />
+              <span className="text-[10px] text-stone-400 group-hover:text-stone-700 transition-colors tracking-wider uppercase">
+                {s.name}
+              </span>
+            </a>
+          ))}
+          <button onClick={checkStatuses} className="ml-1 text-stone-300 hover:text-stone-600 transition-colors">
+            <RefreshCw className="w-3 h-3" />
+          </button>
+        </div>
       </div>
 
-      {/* Service Status Bar */}
-      <div className="flex items-center gap-6 p-4 bg-white rounded-lg border border-gray-200">
-        <span className="text-sm font-medium text-gray-700">Services:</span>
-        {statuses.map(service => (
-          <a
-            key={service.id}
-            href={`http://localhost:${service.id === 'mneme' ? 5173 : service.port}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+      {/* ── Specialty ── */}
+      <div className="flex items-center gap-0 mb-6">
+        {(Object.entries(specialtyConfig) as [Specialty, typeof sc][]).map(([key, config]) => (
+          <button
+            key={key}
+            onClick={() => {
+              setSpecialty(key)
+              if (key === 'internal_medicine' && parseInt(patientAge) < 216) setPatientAge('360')
+              if (key === 'pediatrics' && parseInt(patientAge) > 216) setPatientAge('60')
+            }}
+            className={`px-4 py-2 text-[11px] font-semibold tracking-[0.15em] uppercase border transition-all duration-150 -ml-px first:ml-0 ${
+              specialty === key
+                ? `${config.accentLight} ${config.accent} ${config.accentBorder}`
+                : 'bg-white text-stone-400 border-stone-200 hover:text-stone-600 hover:border-stone-300'
+            }`}
           >
-            <span className={`w-2 h-2 rounded-full ${getStatusColor(service.status)}`} />
-            {service.name}
-            <ExternalLink className="w-3 h-3 opacity-50" />
-          </a>
+            {config.label}
+            <span className="ml-2 text-[10px] font-normal opacity-60">{config.count}</span>
+          </button>
         ))}
+        <span className="ml-auto text-[10px] text-stone-400">{onlineCount}/{statuses.length}</span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Patient Generator */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 bg-emerald-50 border-b border-emerald-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-100 rounded-lg">
-                <User className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-gray-900">Generate Patient</h2>
-                <p className="text-sm text-gray-600">Create a synthetic patient with Oread</p>
-              </div>
-            </div>
+      {/* ── 2×2 Grid ── */}
+      <div className="grid grid-cols-2 gap-[1px] bg-stone-300 border border-stone-300">
+
+        {/* GENERATE */}
+        <div className="bg-white p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-stone-400">Generate</span>
+            <span className={`text-[10px] tracking-widest uppercase ${sc.accent}`}>Oread</span>
           </div>
-
-          <div className="p-6 space-y-4">
-            {!isOreadOnline ? (
-              <div className="flex items-center gap-3 p-4 bg-red-50 text-red-700 rounded-lg">
-                <AlertCircle className="w-5 h-5" />
-                <span className="text-sm">Oread is offline. Start it on port 9104.</span>
+          {!isOreadOnline ? (
+            <p className="text-[11px] text-stone-400">Oread offline — port 9104</p>
+          ) : (
+            <div className="flex items-end gap-3">
+              <div>
+                <label className="block text-[10px] text-stone-400 tracking-wider uppercase mb-1">Age (mo)</label>
+                <input
+                  type="number" value={patientAge}
+                  onChange={(e) => setPatientAge(e.target.value)}
+                  className="w-24 px-3 py-2 bg-stone-50 border border-stone-200 text-stone-800 text-[13px]
+                    focus:outline-none focus:border-stone-400 placeholder:text-stone-300"
+                  min="0" max={specialty === 'pediatrics' ? '216' : '1200'}
+                />
               </div>
-            ) : (
-              <>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Specialty
-                    </label>
-                    <div className="flex gap-2">
-                      {(Object.entries(specialtyLabels) as [Specialty, string][]).map(([key, label]) => (
-                        <button
-                          key={key}
-                          onClick={() => {
-                            setSpecialty(key)
-                            if (key === 'internal_medicine' && parseInt(patientAge) < 216) setPatientAge('360')
-                            if (key === 'pediatrics' && parseInt(patientAge) > 216) setPatientAge('60')
-                          }}
-                          className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                            specialty === key
-                              ? 'bg-emerald-600 text-white border-emerald-600'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-emerald-400'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Patient Age (months)
-                      </label>
-                      <input
-                        type="number"
-                        value={patientAge}
-                        onChange={(e) => setPatientAge(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                        placeholder="24"
-                        min="0"
-                        max={specialty === 'pediatrics' ? '216' : '1200'}
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <button
-                        onClick={handleGenerate}
-                        disabled={isGenerating}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        {isGenerating ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-4 h-4" />
-                        )}
-                        Generate
-                      </button>
-                    </div>
-                  </div>
-                </div>
+              <button
+                onClick={handleGenerate} disabled={isGenerating}
+                className={`px-5 py-2 ${sc.accentBg} text-white text-[11px] font-semibold tracking-[0.15em] uppercase
+                  hover:brightness-110 disabled:opacity-40 transition-all`}
+              >
+                {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'GEN'}
+              </button>
+            </div>
+          )}
+          {generateError && <p className="mt-3 text-[11px] text-red-600">{generateError}</p>}
+        </div>
 
-                {generateError && (
-                  <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-                    {generateError}
-                  </div>
-                )}
-
-                {generatedPatient && (
-                  <div className="p-4 bg-gray-50 rounded-lg space-y-3">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-5 h-5 text-green-600" />
-                      <span className="font-medium text-gray-900">Patient Generated</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-gray-500">Name:</span>
-                        <span className="ml-2 font-medium">{generatedPatient.name}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Age:</span>
-                        <span className="ml-2 font-medium">{generatedPatient.age}</span>
-                      </div>
-                      {generatedPatient.chief_complaint && (
-                        <div className="col-span-2">
-                          <span className="text-gray-500">Chief Complaint:</span>
-                          <span className="ml-2 font-medium">{generatedPatient.chief_complaint}</span>
-                        </div>
-                      )}
-                      {generatedPatient.conditions && generatedPatient.conditions.length > 0 && (
-                        <div className="col-span-2">
-                          <span className="text-gray-500">Conditions:</span>
-                          <span className="ml-2 font-medium">{generatedPatient.conditions.join(', ')}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      <button
-                        onClick={sendToMneme}
-                        disabled={isSendingMneme}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 disabled:opacity-50"
-                      >
-                        {isSendingMneme ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                        Open in Mneme
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={sendToSyrinx}
-                        disabled={isSendingSyrinx}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 disabled:opacity-50"
-                      >
-                        {isSendingSyrinx ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
-                        Send to Syrinx
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
+        {/* PATIENT */}
+        <div className="bg-white p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-stone-400">Patient</span>
+            {generatedPatient && (
+              <span className="text-[10px] text-stone-300">{generatedPatient.patient_id.slice(0,8)}</span>
             )}
           </div>
+          {generatedPatient ? (
+            <>
+              <p className="text-[17px] font-semibold text-stone-900 tracking-tight">{generatedPatient.name}</p>
+              <p className="text-[12px] text-stone-500 mt-1">
+                {generatedPatient.age}{generatedPatient.sex && ` · ${generatedPatient.sex}`}
+              </p>
+              {generatedPatient.conditions && generatedPatient.conditions.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {generatedPatient.conditions.map((c, i) => (
+                    <span key={i} className={`text-[10px] tracking-wide px-2 py-0.5 ${sc.accentLight} ${sc.accent}`}>{c}</span>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-5 mt-4 pt-3 border-t border-stone-100">
+                <button onClick={sendToMneme} disabled={isSendingMneme}
+                  className="text-[10px] text-stone-400 hover:text-stone-700 tracking-[0.15em] uppercase transition-colors disabled:opacity-40">
+                  {isSendingMneme ? '...' : 'CHART →'}
+                </button>
+                <button onClick={sendToSyrinx} disabled={isSendingSyrinx}
+                  className="text-[10px] text-stone-400 hover:text-stone-700 tracking-[0.15em] uppercase transition-colors disabled:opacity-40">
+                  {isSendingSyrinx ? '...' : 'VOICE →'}
+                </button>
+                <a href={`http://localhost:9104/patients/${generatedPatient.patient_id}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-[10px] text-stone-400 hover:text-stone-700 tracking-[0.15em] uppercase transition-colors">
+                  EXPORT →
+                </a>
+              </div>
+            </>
+          ) : (
+            <p className="text-[12px] text-stone-300 font-prose">No patient.</p>
+          )}
         </div>
 
-        {/* Echo Chat */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
-          <div className="px-6 py-4 bg-cyan-50 border-b border-cyan-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-cyan-100 rounded-lg">
-                <MessageCircle className="w-5 h-5 text-cyan-600" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-gray-900">Ask Echo</h2>
-                <p className="text-sm text-gray-600">Socratic guidance on clinical decisions</p>
-              </div>
-            </div>
+        {/* ECHO — full width */}
+        <div className="col-span-2 bg-white flex flex-col">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
+            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-stone-400">Echo</span>
+            <span className="text-[10px] text-stone-300 tracking-widest uppercase">Socratic</span>
           </div>
-
-          <div className="flex-1 p-4 space-y-3 min-h-[200px] max-h-[300px] overflow-y-auto bg-gray-50">
+          <div className="flex-1 min-h-[120px] max-h-[260px] overflow-y-auto px-5 py-4 space-y-3">
             {!isEchoOnline ? (
-              <div className="flex items-center gap-3 p-4 bg-red-50 text-red-700 rounded-lg">
-                <AlertCircle className="w-5 h-5" />
-                <span className="text-sm">Echo is offline. Start it on port 8001.</span>
-              </div>
+              <p className="text-[11px] text-stone-400">Echo offline — port 9101</p>
             ) : echoMessages.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                <Stethoscope className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Ask Echo about clinical reasoning, differential diagnosis, or treatment plans.</p>
-                {generatedPatient && (
-                  <p className="text-xs mt-2 text-cyan-600">Patient context will be included automatically.</p>
-                )}
-              </div>
+              <p className="text-[12px] text-stone-400 font-prose">
+                Ask about clinical reasoning, differentials, or management.
+                {generatedPatient && <span className={`ml-1 ${sc.accent}`}>Patient context attached.</span>}
+              </p>
             ) : (
               echoMessages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`p-3 rounded-lg text-sm ${
-                    msg.role === 'user'
-                      ? 'bg-cyan-100 text-cyan-900 ml-8'
-                      : 'bg-white border border-gray-200 mr-8'
-                  }`}
-                >
+                <div key={i} className={`text-[13px] leading-relaxed font-prose ${
+                  msg.role === 'user'
+                    ? 'text-stone-700 ml-12'
+                    : `text-stone-600 border-l-2 ${sc.accentBorder} pl-4`
+                }`}>
                   {msg.content}
                 </div>
               ))
             )}
             {isEchoLoading && (
-              <div className="flex items-center gap-2 text-gray-500 text-sm">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Echo is thinking...
+              <div className="flex items-center gap-2 text-[11px] text-stone-400">
+                <Loader2 className="w-3 h-3 animate-spin" /> thinking...
               </div>
             )}
+            <div ref={echoEndRef} />
           </div>
-
-          <div className="p-4 border-t border-gray-200">
+          <div className="px-5 py-3 border-t border-stone-100">
             <div className="flex gap-2">
               <input
-                type="text"
-                value={echoInput}
+                type="text" value={echoInput}
                 onChange={(e) => setEchoInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendToEcho()}
-                placeholder={isEchoOnline ? "What should I consider for this patient?" : "Echo is offline"}
+                placeholder={isEchoOnline ? 'ask echo...' : 'offline'}
                 disabled={!isEchoOnline}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 disabled:bg-gray-100"
+                className="flex-1 px-3 py-2 bg-stone-50 border border-stone-200 text-stone-700 text-[13px] font-prose
+                  placeholder:text-stone-300 focus:outline-none focus:border-stone-400 disabled:opacity-40"
               />
-              <button
-                onClick={sendToEcho}
-                disabled={!isEchoOnline || !echoInput.trim()}
-                className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:opacity-50"
-              >
-                <Send className="w-4 h-4" />
-              </button>
+              <button onClick={sendToEcho} disabled={!isEchoOnline || !echoInput.trim()}
+                className={`px-4 py-2 ${sc.accentLight} ${sc.accent} text-[12px] font-semibold
+                  hover:brightness-95 disabled:opacity-30 transition-all border ${sc.accentBorder}`}
+              >↵</button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <a
-          href="http://localhost:9104"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:border-emerald-300 hover:shadow-md transition-all"
-        >
-          <div className="p-3 bg-emerald-100 rounded-lg">
-            <Baby className="w-6 h-6 text-emerald-600" />
-          </div>
-          <div>
-            <h3 className="font-medium text-gray-900">Full Oread UI</h3>
-            <p className="text-sm text-gray-500">Advanced patient generation</p>
-          </div>
-          <ExternalLink className="w-4 h-4 text-gray-400 ml-auto" />
-        </a>
-
-        <a
-          href="http://localhost:5173"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:border-amber-300 hover:shadow-md transition-all"
-        >
-          <div className="p-3 bg-amber-100 rounded-lg">
-            <ClipboardList className="w-6 h-6 text-amber-600" />
-          </div>
-          <div>
-            <h3 className="font-medium text-gray-900">Mneme EMR</h3>
-            <p className="text-sm text-gray-500">Review patient charts</p>
-          </div>
-          <ExternalLink className="w-4 h-4 text-gray-400 ml-auto" />
-        </a>
-
-        <a
-          href="http://localhost:9103"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:border-violet-300 hover:shadow-md transition-all"
-        >
-          <div className="p-3 bg-violet-100 rounded-lg">
-            <Mic className="w-6 h-6 text-violet-600" />
-          </div>
-          <div>
-            <h3 className="font-medium text-gray-900">Syrinx Voice</h3>
-            <p className="text-sm text-gray-500">Generate encounter scripts</p>
-          </div>
-          <ExternalLink className="w-4 h-4 text-gray-400 ml-auto" />
-        </a>
+      {/* ── Footer Stats ── */}
+      <div className="flex items-center gap-6 mt-3 text-[10px] text-stone-400 tracking-wider">
+        <span><span className="text-stone-600">213</span> conditions</span>
+        <span><span className="text-stone-600">337</span> frameworks</span>
+        <span><span className="text-stone-600">14</span> arcs</span>
+        <span className="ml-auto"><span className={`inline-block w-1.5 h-1.5 rounded-full ${sc.dotColor} mr-1.5`} />{sc.label}</span>
       </div>
     </div>
   )
