@@ -1,10 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Session } from '@supabase/supabase-js'
-import {
-  Mic, FileText, Send, RefreshCw,
-  Sparkles, ArrowRight, ExternalLink, Loader2, CheckCircle2,
-  AlertCircle, Baby, Stethoscope, ClipboardList
-} from 'lucide-react'
+import { RefreshCw, Loader2 } from 'lucide-react'
 
 interface DashboardProps {
   session: Session | null
@@ -73,7 +69,7 @@ const specialtyConfig = {
   },
 }
 
-export default function Dashboard({ session }: DashboardProps) {
+export default function Dashboard({ session: _session }: DashboardProps) {
   const [statuses, setStatuses] = useState<ServiceStatus[]>(
     services.map(s => ({ ...s, status: 'checking' }))
   )
@@ -87,7 +83,31 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isEchoLoading, setIsEchoLoading] = useState(false)
   const [isSendingMneme, setIsSendingMneme] = useState(false)
   const [isSendingSyrinx, setIsSendingSyrinx] = useState(false)
+  const [athenaStats, setAthenaStats] = useState({ conditions: 0, frameworks: 0, disease_arcs: 0, learner_tracks: 0 })
+  const [learnerLevel, setLearnerLevel] = useState<'student' | 'resident' | 'np_student'>('student')
   const echoEndRef = useRef<HTMLDivElement>(null)
+
+  // Fetch Athena knowledge stats
+  useEffect(() => {
+    fetch('/api/athena/health')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.knowledge) setAthenaStats(data.knowledge)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Update specialty condition counts from Athena
+  useEffect(() => {
+    fetch(`/api/athena/conditions?specialty=${specialty}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) {
+          specialtyConfig[specialty].count = String(data.length)
+        }
+      })
+      .catch(() => {})
+  }, [specialty])
 
   const checkStatuses = useCallback(async () => {
     const updated = await Promise.all(
@@ -177,7 +197,7 @@ export default function Dashboard({ session }: DashboardProps) {
       const patientRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}?format=json`)
       if (!patientRes.ok) throw new Error('Failed to fetch patient from Oread')
       const patientData = await patientRes.json()
-      const importRes = await fetch('/api/syrinx/patients/import', {
+      await fetch('/api/syrinx/patients/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patientData),
@@ -194,7 +214,7 @@ export default function Dashboard({ session }: DashboardProps) {
     setEchoInput('')
     setIsEchoLoading(true)
     try {
-      const payload: Record<string, unknown> = { learner_question: userMessage, learner_level: 'student' }
+      const payload: Record<string, unknown> = { learner_question: userMessage, learner_level: learnerLevel }
       if (generatedPatient) {
         try {
           const ctxRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}/context`)
@@ -222,7 +242,6 @@ export default function Dashboard({ session }: DashboardProps) {
 
   const isOreadOnline = statuses.find(s => s.id === 'oread')?.status === 'online'
   const isEchoOnline = statuses.find(s => s.id === 'echo')?.status === 'online'
-  const onlineCount = statuses.filter(s => s.status === 'online').length
   const sc = specialtyConfig[specialty]
 
   return (
@@ -275,7 +294,21 @@ export default function Dashboard({ session }: DashboardProps) {
             <span className="ml-2 text-[10px] font-normal opacity-60">{config.count}</span>
           </button>
         ))}
-        <span className="ml-auto text-[10px] text-stone-400">{onlineCount}/{statuses.length}</span>
+        <div className="ml-auto flex items-center gap-0">
+          {(['student', 'resident', 'np_student'] as const).map(level => (
+            <button
+              key={level}
+              onClick={() => setLearnerLevel(level)}
+              className={`px-3 py-1.5 text-[10px] tracking-wider uppercase border -ml-px first:ml-0 transition-all ${
+                learnerLevel === level
+                  ? 'bg-stone-800 text-stone-100 border-stone-800'
+                  : 'bg-white text-stone-400 border-stone-200 hover:text-stone-600'
+              }`}
+            >
+              {level === 'np_student' ? 'NP' : level === 'student' ? 'MS' : 'PGY'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── 2×2 Grid ── */}
@@ -409,10 +442,14 @@ export default function Dashboard({ session }: DashboardProps) {
 
       {/* ── Footer Stats ── */}
       <div className="flex items-center gap-6 mt-3 text-[10px] text-stone-400 tracking-wider">
-        <span><span className="text-stone-600">213</span> conditions</span>
-        <span><span className="text-stone-600">337</span> frameworks</span>
-        <span><span className="text-stone-600">14</span> arcs</span>
-        <span className="ml-auto"><span className={`inline-block w-1.5 h-1.5 rounded-full ${sc.dotColor} mr-1.5`} />{sc.label}</span>
+        <span><span className="text-stone-600">{athenaStats.conditions || '—'}</span> conditions</span>
+        <span><span className="text-stone-600">{athenaStats.frameworks || '—'}</span> frameworks</span>
+        <span><span className="text-stone-600">{athenaStats.disease_arcs || '—'}</span> arcs</span>
+        <span><span className="text-stone-600">{athenaStats.learner_tracks || '—'}</span> tracks</span>
+        <span className="ml-auto">
+          <span className={`inline-block w-1.5 h-1.5 rounded-full ${sc.dotColor} mr-1.5`} />
+          {sc.label} · {learnerLevel === 'np_student' ? 'NP' : learnerLevel === 'student' ? 'MS' : 'PGY'}
+        </span>
       </div>
     </div>
   )
