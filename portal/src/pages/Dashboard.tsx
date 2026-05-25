@@ -78,23 +78,30 @@ export default function Dashboard({ session: _session }: DashboardProps) {
   const [patientAge, setPatientAge] = useState('24')
   const [specialty, setSpecialty] = useState<Specialty>('pediatrics')
   const [generateError, setGenerateError] = useState<string | null>(null)
+  const [mnemeError, setMnemeError] = useState<string | null>(null)
+  const [syrinxError, setSyrinxError] = useState<string | null>(null)
   const [echoMessages, setEchoMessages] = useState<EchoMessage[]>([])
   const [echoInput, setEchoInput] = useState('')
   const [isEchoLoading, setIsEchoLoading] = useState(false)
   const [isSendingMneme, setIsSendingMneme] = useState(false)
   const [isSendingSyrinx, setIsSendingSyrinx] = useState(false)
   const [athenaStats, setAthenaStats] = useState({ conditions: 0, frameworks: 0, disease_arcs: 0, learner_tracks: 0 })
+  const [athenaOnline, setAthenaOnline] = useState<boolean | null>(null)
   const [learnerLevel, setLearnerLevel] = useState<'student' | 'resident' | 'np_student'>('student')
   const echoEndRef = useRef<HTMLDivElement>(null)
 
   // Fetch Athena knowledge stats
   useEffect(() => {
     fetch('/api/athena/health')
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        if (!r.ok) throw new Error(`Athena health ${r.status}`)
+        return r.json()
+      })
       .then(data => {
         if (data?.knowledge) setAthenaStats(data.knowledge)
+        setAthenaOnline(true)
       })
-      .catch(() => {})
+      .catch(() => setAthenaOnline(false))
   }, [])
 
   // Update specialty condition counts from Athena
@@ -106,11 +113,18 @@ export default function Dashboard({ session: _session }: DashboardProps) {
           specialtyConfig[specialty].count = String(data.length)
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        // Athena offline indicator already set by health check
+      })
   }, [specialty])
 
   const checkStatuses = useCallback(async () => {
-    const updated = await Promise.all(
+    // Per-service 2s timeout AND overall 3s budget — prevents one hung service
+    // from stalling the whole poll.
+    const overallBudget = new Promise<ServiceStatus[]>((resolve) =>
+      setTimeout(() => resolve(services.map(s => ({ ...s, status: 'offline' } as ServiceStatus))), 3000)
+    )
+    const probes = Promise.all(
       services.map(async (service) => {
         try {
           const controller = new AbortController()
@@ -126,6 +140,7 @@ export default function Dashboard({ session: _session }: DashboardProps) {
         }
       })
     )
+    const updated = await Promise.race([probes, overallBudget])
     setStatuses(updated)
   }, [])
 
@@ -172,39 +187,53 @@ export default function Dashboard({ session: _session }: DashboardProps) {
   const sendToMneme = async () => {
     if (!generatedPatient) return
     setIsSendingMneme(true)
+    setMnemeError(null)
     try {
       const patientRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}?format=json`)
-      if (!patientRes.ok) throw new Error('Failed to fetch patient from Oread')
+      if (!patientRes.ok) throw new Error(`Oread fetch failed (${patientRes.status})`)
       const patientData = await patientRes.json()
       const importRes = await fetch('/api/mneme/import/oread/json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patientData),
       })
-      if (importRes.ok) {
-        const result = await importRes.json()
-        const mnemePatientId = result.details?.patient_id
-        window.open(mnemePatientId ? `http://localhost:5173/patients/${mnemePatientId}` : 'http://localhost:5173', '_blank')
-      } else { window.open('http://localhost:5173/import', '_blank') }
-    } catch { window.open('http://localhost:5173/import', '_blank') }
-    finally { setIsSendingMneme(false) }
+      if (!importRes.ok) {
+        const detail = await importRes.text().catch(() => '')
+        throw new Error(`Mneme import failed (${importRes.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`)
+      }
+      const result = await importRes.json()
+      const mnemePatientId = result.details?.patient_id
+      window.open(mnemePatientId ? `http://localhost:5173/patients/${mnemePatientId}` : 'http://localhost:5173', '_blank')
+    } catch (err) {
+      setMnemeError(err instanceof Error ? err.message : 'Mneme import failed')
+    } finally {
+      setIsSendingMneme(false)
+    }
   }
 
   const sendToSyrinx = async () => {
     if (!generatedPatient) return
     setIsSendingSyrinx(true)
+    setSyrinxError(null)
     try {
       const patientRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}?format=json`)
-      if (!patientRes.ok) throw new Error('Failed to fetch patient from Oread')
+      if (!patientRes.ok) throw new Error(`Oread fetch failed (${patientRes.status})`)
       const patientData = await patientRes.json()
-      await fetch('/api/syrinx/patients/import', {
+      const importRes = await fetch('/api/syrinx/patients/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patientData),
       })
+      if (!importRes.ok) {
+        const detail = await importRes.text().catch(() => '')
+        throw new Error(`Syrinx import failed (${importRes.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`)
+      }
       window.open('http://localhost:9103', '_blank')
-    } catch { window.open('http://localhost:9103', '_blank') }
-    finally { setIsSendingSyrinx(false) }
+    } catch (err) {
+      setSyrinxError(err instanceof Error ? err.message : 'Syrinx send failed')
+    } finally {
+      setIsSendingSyrinx(false)
+    }
   }
 
   const sendToEcho = async () => {
@@ -382,6 +411,18 @@ export default function Dashboard({ session: _session }: DashboardProps) {
                   EXPORT →
                 </a>
               </div>
+              {mnemeError && (
+                <p className="mt-2 text-[10px] text-red-600">
+                  CHART: {mnemeError}{' '}
+                  <button onClick={() => setMnemeError(null)} className="underline ml-1">dismiss</button>
+                </p>
+              )}
+              {syrinxError && (
+                <p className="mt-1 text-[10px] text-red-600">
+                  VOICE: {syrinxError}{' '}
+                  <button onClick={() => setSyrinxError(null)} className="underline ml-1">dismiss</button>
+                </p>
+              )}
             </>
           ) : (
             <p className="text-[12px] text-stone-300 font-prose">No patient.</p>
@@ -446,6 +487,12 @@ export default function Dashboard({ session: _session }: DashboardProps) {
         <span><span className="text-stone-600">{athenaStats.frameworks || '—'}</span> frameworks</span>
         <span><span className="text-stone-600">{athenaStats.disease_arcs || '—'}</span> arcs</span>
         <span><span className="text-stone-600">{athenaStats.learner_tracks || '—'}</span> tracks</span>
+        {athenaOnline === false && (
+          <span className="text-red-600">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5" />
+            Athena offline
+          </span>
+        )}
         <span className="ml-auto">
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${sc.dotColor} mr-1.5`} />
           {sc.label} · {learnerLevel === 'np_student' ? 'NP' : learnerLevel === 'student' ? 'MS' : 'PGY'}
