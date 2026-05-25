@@ -20,8 +20,8 @@ const toolConfigs: Record<string, ToolConfig> = {
   oread: {
     name: 'Oread',
     greekName: 'synpat',
-    healthPort: 8004,
-    uiPort: 8004,
+    healthPort: 9104,
+    uiPort: 9104,
     color: 'emerald',
     icon: User,
     description: 'Synthetic Patient Generator',
@@ -29,8 +29,8 @@ const toolConfigs: Record<string, ToolConfig> = {
   syrinx: {
     name: 'Syrinx',
     greekName: 'synvoice',
-    healthPort: 8003,
-    uiPort: 8003,
+    healthPort: 9103,
+    uiPort: 9103,
     color: 'violet',
     icon: Mic,
     description: 'Encounter Script Generator',
@@ -38,7 +38,7 @@ const toolConfigs: Record<string, ToolConfig> = {
   mneme: {
     name: 'Mneme',
     greekName: 'synchart',
-    healthPort: 8002,
+    healthPort: 9102,
     uiPort: 5173,
     color: 'amber',
     icon: FileText,
@@ -47,8 +47,8 @@ const toolConfigs: Record<string, ToolConfig> = {
   echo: {
     name: 'Echo',
     greekName: 'echo',
-    healthPort: 8001,
-    uiPort: 5175,
+    healthPort: 9101,
+    uiPort: 5000,
     color: 'cyan',
     icon: MessageCircle,
     description: 'AI Attending Tutor',
