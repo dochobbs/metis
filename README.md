@@ -184,12 +184,28 @@ The `METIS_MODE` environment variable controls service behavior:
 
 ## Documentation
 
+**Start here:**
+- [Quickstart](docs/QUICKSTART.md) — fresh-machine setup in ~15 minutes
+- [Services](docs/SERVICES.md) — one-page summary of each of the six services
+- [Architecture](docs/ARCHITECTURE.md) — visual diagrams (request flow, dependency graph, specialty resolver)
+
+**Reference:**
 - [Integration Guide](docs/INTEGRATION.md) — cross-service data flow, proxy map, test recipes
 - [Platform Design (v2)](docs/PLATFORM-DESIGN.md) — architectural spec
+- [Model Sync](docs/MODEL-SYNC.md) — how shared Pydantic models stay in sync across services
+- [Curriculum](docs/CURRICULUM.md) — full catalog of conditions and frameworks
+- [Glossary](docs/GLOSSARY.md) — platform terms + medical-coding standards (SNOMED, ICD-10, CVX, …)
+
+**Project:**
+- [Roadmap](docs/ROADMAP.md) — what's done, what's next, post-MVP backlog
+- [Deployment](docs/DEPLOYMENT.md) — current state (dev-only) and what production needs
+- [Changelog](CHANGELOG.md) — release notes
+- [Contributing](CONTRIBUTING.md) — how to file issues, set up locally, open PRs
+- [Security](SECURITY.md) — vulnerability disclosure policy
 - [CLAUDE.md](CLAUDE.md) — context for AI assistants working in this repo
 
 ---
 
 ## License
 
-TBD.
+[MIT](LICENSE) © 2026 Michael Hobbs
