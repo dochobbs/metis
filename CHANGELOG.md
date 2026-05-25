@@ -9,6 +9,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ## [Unreleased]
 
 ### Added
+- `scripts/e2e-smoke.sh` — end-to-end smoke test exercising the critical cross-service path (Athena → Oread → Mneme → Syrinx → Echo → Metis proxy). Read-mostly, jq-based, ~14 checks, exits non-zero on any failure. (W7.3 in BETA-WORKLIST.)
 - Public GitHub release of Metis at `dochobbs/metis`
 - Suite-level documentation set: README rewrite, `docs/INTEGRATION.md`, `docs/PLATFORM-DESIGN.md`, `docs/SERVICES.md`, `docs/ARCHITECTURE.md`, `docs/CURRICULUM.md`, `docs/ROADMAP.md`, `docs/MODEL-SYNC.md`, `docs/QUICKSTART.md`, `docs/GLOSSARY.md`, `docs/DEPLOYMENT.md`
 - `LICENSE` (MIT), `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`

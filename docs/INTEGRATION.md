@@ -94,6 +94,8 @@ Athena resolves knowledge by specialty:
 
 ## How to Test
 
+> **TL;DR — canonical recipe:** after `./start-all.sh`, run `./scripts/e2e-smoke.sh`. It exercises the full critical path (Athena knowledge → Oread generate → Mneme import → Syrinx import → Echo Q&A → Metis proxy) and prints a pass/fail summary. The manual `curl` recipes below are kept for debugging individual hops.
+
 ### Prerequisites
 
 Start all services:
@@ -102,6 +104,9 @@ Start all services:
 cd /Users/dochobbs/Downloads/Consult/MedEd/metis/scripts
 ./start-all.sh
 ./status.sh
+
+# Once all green, run the suite smoke test:
+./e2e-smoke.sh
 ```
 
 Or start individually:
