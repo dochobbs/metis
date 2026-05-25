@@ -1,131 +1,195 @@
-# Metis
+# Metis — MedEd Platform
 
-**Unified Medical Education Platform**
+**Unified portal and front door for the MedEd medical education suite.**
 
-Named after Metis, the Greek goddess of wisdom and counsel, this project unifies the MedEd platform tools into a cohesive learning ecosystem.
+Metis (named after the Greek titaness of wisdom and counsel) is the hub of a six-service platform for primary care medical education across **Pediatrics**, **Internal Medicine**, and **Family Practice**.
 
-## Overview
+---
 
-Metis provides:
-- **Unified Portal**: Single entry point for all MedEd tools
-- **Shared Authentication**: Login once, access everything
-- **Model Sync**: Keep shared data models consistent across projects
-- **Easy Orchestration**: Shell scripts to run the full platform
+## The Suite
 
-## Quick Start
+Each service is named after a figure from Greek mythology and runs as an independent microservice. Metis is the portal you open; the others power what happens inside it.
 
-### Run Everything
-```bash
-cd metis/scripts
-./start-all.sh
-# Portal at http://localhost:3000
-```
+| Service | Role | Port | Repository |
+|---------|------|------|------------|
+| **Metis** | Unified portal, routing, shared models | 9100 | this repo |
+| **Echo** | AI Attending tutor (Socratic) | 9101 | [dochobbs/echo](https://github.com/dochobbs/echo) |
+| **Mneme** | Minimal EMR interface | 9102 | [dochobbs/mneme](https://github.com/dochobbs/mneme) |
+| **Syrinx** | Voice encounter scripts + audio | 9103 | [dochobbs/syrinx](https://github.com/dochobbs/syrinx) |
+| **Oread** | Synthetic patient generation | 9104 | [dochobbs/oread](https://github.com/dochobbs/oread) |
+| **Athena** | Curriculum & knowledge service | 9105 | _internal_ |
 
-### Check Status
-```bash
-./status.sh
-```
+> **Status (April 2026):** Athena, Oread, and Syrinx are in production. Echo is production-ready. Mneme is ~95% complete. Metis is a working portal under active iteration.
 
-### Stop Everything
-```bash
-./stop-all.sh
-```
+---
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Metis Portal                          │
-│                  (localhost:3000)                        │
-│         React + Vite + Tailwind + Supabase Auth          │
-└──────┬──────────┬──────────┬──────────┬────────────────┘
-       │          │          │          │
-       ▼          ▼          ▼          ▼
-   ┌───────┐  ┌────────┐  ┌───────┐  ┌──────┐
-   │ Oread │  │ Syrinx │  │ Mneme │  │ Echo │
-   │ :8004 │  │ :8003  │  │ :8002 │  │ :8001│
-   └───────┘  └────────┘  └───────┘  └──────┘
-   Patient    Encounter    EMR        AI
-   Generator  Scripts      Viewer     Tutor
+│                    METIS (9100)                          │
+│         Unified dashboard + service routing              │
+└────────────────────────┬────────────────────────────────┘
+                         │
+         ┌───────────────┼───────────────────┐
+         │               │                   │
+         ▼               ▼                   ▼
+   ┌──────────┐   ┌──────────┐        ┌──────────┐
+   │  OREAD   │   │  SYRINX  │        │   ECHO   │
+   │  9104    │   │  9103    │        │  9101    │
+   │ Patients │   │  Voice   │        │  Tutor   │
+   └────┬─────┘   └────┬─────┘        └────┬─────┘
+        │               │                   │
+        └───────┬───────┴───────────────────┘
+                │          ▲
+                ▼          │
+          ┌──────────┐     │
+          │  MNEME   │─────┘
+          │  9102    │
+          │   EMR    │
+          └──────────┘
+
+    All services query ─────► ┌──────────┐
+                              │  ATHENA  │
+                              │  9105    │
+                              │ Curric.  │
+                              │ & Know.  │
+                              └──────────┘
 ```
 
-### Dashboard Data Flow (February 2026)
+- **Metis** is the top of the request flow (learner → portal → backends).
+- **Athena** is the bottom of the dependency flow (every service depends on it; it depends on no one).
 
-The Dashboard makes real API calls to move patient data between services:
+---
 
-```
-Generate → Oread POST /api/generate
-    │
-    ├── "Open in Mneme"  → GET patient from Oread → POST to Mneme /api/import/oread/json
-    ├── "Send to Syrinx" → GET patient from Oread → POST to Syrinx /api/patients/import
-    └── Echo chat        → GET /context from Oread → POST to Echo /question
-```
+## Specialty Model
 
-## Directory Structure
+| Specialty | Age range | Knowledge pools |
+|-----------|-----------|----------------|
+| **Pediatrics** | 0–18 years | `peds/` + `shared/` |
+| **Internal Medicine** | 18+ years | `im/` + `shared/` |
+| **Family Practice** | All ages | `peds/` + `im/` + `shared/` (union) |
 
-```
-metis/
-├── portal/          # React dashboard
-│   └── src/
-├── shared/          # Model definitions & sync tool
-│   ├── models/      # JSON schemas
-│   └── sync.py      # Code generator
-├── scripts/         # Orchestration scripts
-└── README.md
-```
+FP is not a separate knowledge base — Athena's resolver unions both pools.
 
-## Tools
+**Current content:** 213 conditions, 332 frameworks, 3 specialties, 15 learner tracks.
 
-| Tool | Greek Name | Purpose | Port |
-|------|------------|---------|------|
-| synpat | **Oread** | Synthetic patient generator | 8004 |
-| synvoice | **Syrinx** | Voice encounter scripts | 8003 |
-| synchart | **Mneme** | Minimal EMR viewer | 8002 |
-| echo | **Echo** | AI attending tutor | 8001 |
+---
 
-## Model Sync
+## Quick Start
 
-Keep shared Pydantic models in sync across projects:
+### Run everything
 
 ```bash
-cd metis/shared
-python sync.py --project all      # Regenerate all
-python sync.py --validate         # Check sync status
+cd metis/scripts
+./start-all.sh
+./status.sh
+# Portal at http://localhost:9100
 ```
 
-## Vite Proxy Configuration
+### Stop everything
 
-All Dashboard API calls go through Vite's dev proxy on port 3000:
+```bash
+./stop-all.sh
+```
+
+### Run a single service
+
+Each service is independently runnable from its own repo. See per-service READMEs, or [docs/INTEGRATION.md](docs/INTEGRATION.md#how-to-test) for the canonical startup order (Athena first).
+
+---
+
+## Dashboard Data Flow
+
+The portal makes real API calls to move patients between services:
+
+```
+Generate          → Oread  POST /api/generate
+"Open in Mneme"   → GET patient from Oread → POST to Mneme /api/import/oread/json
+"Send to Syrinx"  → GET patient from Oread → POST to Syrinx /api/patients/import
+Echo chat         → GET /context from Oread → POST to Echo /question
+Knowledge         → Athena GET /api/conditions?specialty=...
+```
+
+Full reference: [docs/INTEGRATION.md](docs/INTEGRATION.md).
+
+---
+
+## Vite Proxy
+
+All Dashboard API calls go through Vite's dev proxy on port 9100:
 
 | Dashboard calls | Proxy rewrites to | Backend |
 |-----------------|-------------------|---------|
-| `/api/oread/...` | `localhost:8004/api/...` | Oread |
-| `/api/syrinx/...` | `localhost:8003/api/...` | Syrinx |
-| `/api/mneme/...` | `localhost:8002/api/...` | Mneme |
-| `/api/echo/...` | `localhost:8001/...` | Echo |
+| `/api/oread/...` | `localhost:9104/api/...` | Oread |
+| `/api/syrinx/...` | `localhost:9103/api/...` | Syrinx |
+| `/api/mneme/...` | `localhost:9102/api/...` | Mneme |
+| `/api/echo/...` | `localhost:9101/...` | Echo |
+| `/api/athena/...` | `localhost:9105/api/...` | Athena |
 
-**Gotcha:** Echo routes have no `/api/` prefix. The Echo proxy rewrites to `''` (empty string), not `'/api'`. All other services rewrite to `'/api'`.
+**Gotcha:** Echo routes have **no** `/api/` prefix. The Echo proxy rewrites to `''` (empty string), not `'/api'`. All other services rewrite to `'/api'`.
+
+---
+
+## Repository Layout
+
+```
+metis/
+├── portal/           # React + Vite + Tailwind dashboard
+├── shared/           # Shared model definitions + sync tool
+├── scripts/          # Orchestration (start/stop/status)
+├── docs/             # Suite documentation
+│   ├── INTEGRATION.md
+│   └── PLATFORM-DESIGN.md
+└── README.md
+```
+
+---
 
 ## Standalone vs Ecosystem
 
-Each tool can run independently:
+Each service can run independently:
+
 ```bash
-cd synpat && python server.py  # Just Oread
+cd ../synpat && python server.py    # Just Oread
 ```
 
-Or as part of Metis:
+Or as part of the suite:
+
 ```bash
 cd metis/scripts && ./start-all.sh  # Everything
 ```
 
-Environment variable `METIS_MODE` controls behavior:
-- `standalone` (default): Permissive CORS, optional auth
-- `ecosystem`: Restricted CORS, required auth, progress tracking
+The `METIS_MODE` environment variable controls service behavior:
+
+- `standalone` (default): permissive CORS, optional auth
+- `ecosystem`: restricted CORS, required auth, progress tracking
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Backend | Python 3.11+, FastAPI, Pydantic v2 |
+| Database | Supabase (PostgreSQL) |
+| Frontend | React 18, TypeScript, Tailwind |
+| LLM | Anthropic Claude API |
+| TTS | ElevenLabs |
+| STT | Deepgram, Whisper (local) |
+| Knowledge | YAML (conditions, frameworks), JSON Schema (shared models) |
+| Medical standards | SNOMED CT, ICD-10, RxNorm, LOINC, CVX, FHIR R4, C-CDA 2.1 |
+
+---
 
 ## Documentation
 
-| Doc | Location |
-|-----|----------|
-| Platform README | [MedEd/README.md](../README.md) |
-| Integration Guide | [docs/INTEGRATION.md](../docs/INTEGRATION.md) |
-| Parent CLAUDE.md | [MedEd/CLAUDE.md](../CLAUDE.md) |
+- [Integration Guide](docs/INTEGRATION.md) — cross-service data flow, proxy map, test recipes
+- [Platform Design (v2)](docs/PLATFORM-DESIGN.md) — architectural spec
+- [CLAUDE.md](CLAUDE.md) — context for AI assistants working in this repo
+
+---
+
+## License
+
+TBD.

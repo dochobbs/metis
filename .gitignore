@@ -1,1 +1,26 @@
 node_modules/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Build / dist
+dist/
+build/
+.cache/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
