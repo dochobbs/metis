@@ -52,7 +52,7 @@ start_service "oread" "synpat" "python server.py" "9104"
 start_service "syrinx" "synvoice" "python server.py" "9103"
 start_service "mneme-backend" "synchart/backend" "python -m src.main" "9102"
 start_service "echo" "echo" "uvicorn src.main:app --port 9101" "9101"
-start_service "athena" "athena" "PYTHONPATH=$MEDED_DIR uvicorn athena.src.main:app --port 9105" "9105"
+start_service "athena" "athena" "env PYTHONPATH=$MEDED_DIR uvicorn athena.src.main:app --port 9105" "9105"
 
 # Start frontends
 start_npm "mneme-frontend" "synchart/frontend" "5173"

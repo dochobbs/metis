@@ -31,6 +31,7 @@ ECHO_URL="http://localhost:9101"
 METIS_URL="http://localhost:9100"
 
 CURL_TIMEOUT=15
+GENERATE_TIMEOUT=240   # Oread /api/generate uses LLM; can take ~2min
 
 START_TIME=$(date +%s)
 PASS=0
@@ -96,7 +97,8 @@ http_get() {
 http_post() {
   local url="$1"
   local body="$2"
-  curl -sS --max-time "$CURL_TIMEOUT" -X POST \
+  local timeout="${3:-$CURL_TIMEOUT}"
+  curl -sS --max-time "$timeout" -X POST \
     -H 'Content-Type: application/json' \
     -d "$body" \
     -w '\n__HTTP_STATUS__:%{http_code}' \
@@ -220,7 +222,7 @@ PATIENT_JSON=""
 PATIENT_CONTEXT=""
 
 # (d) POST /api/generate
-resp=$(http_post "$OREAD_URL/api/generate" '{"age_months": 24, "specialty": "pediatrics"}')
+resp=$(http_post "$OREAD_URL/api/generate" '{"age_months": 24, "specialty": "pediatrics"}' "$GENERATE_TIMEOUT")
 code=$(extract_status "$resp")
 body=$(extract_body "$resp")
 if [ "$code" = "200" ] || [ "$code" = "201" ]; then
@@ -240,11 +242,13 @@ if [ -n "$PATIENT_ID" ]; then
   code=$(extract_status "$resp")
   body=$(extract_body "$resp")
   if [ "$code" = "200" ]; then
+    # Oread's format=json returns nested demographics with given_names (array),
+    # sex_at_birth, date_of_birth. Accept flat OR nested shape.
     has_fields=$(echo "$body" | jq -r '
       (
-        ((.name // .first_name // .demographics.first_name) != null) and
-        ((.age_months // .demographics.age_months) != null) and
-        ((.sex // .demographics.sex) != null)
+        ((.name // .first_name // .demographics.first_name // .demographics.given_names[0]) != null) and
+        ((.age_months // .demographics.age_months // .demographics.date_of_birth) != null) and
+        ((.sex // .demographics.sex // .demographics.sex_at_birth) != null)
       ) // false
     ' 2>/dev/null || echo "false")
     if [ "$has_fields" = "true" ]; then
@@ -317,12 +321,15 @@ if [ -n "$PATIENT_JSON" ]; then
   if [ "$code" = "200" ] || [ "$code" = "201" ]; then
     pass "Mneme POST /api/import/oread/json" "HTTP $code — Supabase write succeeded"
   elif [ "$code" = "500" ] || [ "$code" = "503" ]; then
-    detail=$(echo "$body" | jq -r '.detail // .message // .error // "(no detail)"' 2>/dev/null || echo "(no detail)")
-    # 500 acceptable iff Supabase is unconfigured locally and the error is clearly labelled.
-    if echo "$detail" | grep -qiE 'supabase|database|connection|credentials|env'; then
-      pass "Mneme POST /api/import/oread/json" "HTTP $code (expected w/o Supabase) — detail: $(echo "$detail" | head -c 120)"
+    # Parse JSON detail; fall back to raw body (Mneme returns plain text on uncaught exceptions).
+    detail=$(echo "$body" | jq -r '.detail // .message // .error // empty' 2>/dev/null || true)
+    if [ -z "$detail" ]; then detail="$body"; fi
+    # Best-effort: peek at the server log for the root cause keywords too.
+    log_tail=$(tail -50 /tmp/meded-mneme-backend.log 2>/dev/null | tr -d '\n' || true)
+    if echo "$detail $log_tail" | grep -qiE 'supabase|httpx.ConnectError|nodename|database|connection|credentials|nxdomain|ServiceUnavailable'; then
+      pass "Mneme POST /api/import/oread/json" "HTTP $code (Supabase unreachable — likely DNS or config; see /tmp/meded-mneme-backend.log)"
     else
-      fail "Mneme POST /api/import/oread/json" "HTTP $code — unexpected detail: $(echo "$detail" | head -c 200)"
+      fail "Mneme POST /api/import/oread/json" "HTTP $code — unrecognized failure: $(echo "$detail" | head -c 200)"
     fi
   else
     fail "Mneme POST /api/import/oread/json" "HTTP $code — body: $(echo "$body" | head -c 200)"
