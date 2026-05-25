@@ -17,7 +17,7 @@ Each service is named after a figure from Greek mythology and runs as an indepen
 | **Mneme** | Minimal EMR interface | 9102 | [dochobbs/mneme](https://github.com/dochobbs/mneme) |
 | **Syrinx** | Voice encounter scripts + audio | 9103 | [dochobbs/syrinx](https://github.com/dochobbs/syrinx) |
 | **Oread** | Synthetic patient generation | 9104 | [dochobbs/oread](https://github.com/dochobbs/oread) |
-| **Athena** | Curriculum & knowledge service | 9105 | _internal_ |
+| **Athena** | Curriculum & knowledge service | 9105 | [dochobbs/athena](https://github.com/dochobbs/athena) |
 
 > **Status (April 2026):** Athena, Oread, and Syrinx are in production. Echo is production-ready. Mneme is ~95% complete. Metis is a working portal under active iteration.
 

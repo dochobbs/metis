@@ -100,7 +100,7 @@ Synthetic patient generator. Produces realistic peds and adult patients with his
 
 ## Athena
 
-**Port:** 9105 · **Repo:** _internal_ · **Stack:** FastAPI + YAML + Pydantic v2
+**Port:** 9105 · **Repo:** [dochobbs/athena](https://github.com/dochobbs/athena) · **Stack:** FastAPI + YAML + Pydantic v2
 
 The knowledge backbone. Centralizes all medical content: conditions, teaching frameworks, disease arcs, specialty resolvers, learner tracks. Every other service queries Athena (with graceful fallback if it's down).
 
@@ -121,7 +121,7 @@ The knowledge backbone. Centralizes all medical content: conditions, teaching fr
 - `internal_medicine` → `im/` + `shared/` = 181 conditions
 - `family_practice` → `peds/` + `im/` + `shared/` = 213 conditions
 
-**Status:** Production. 62 tests, 12 endpoints. Not yet on GitHub.
+**Status:** Production. 117 tests passing (up from 62 after May 2026 hardening work), 12 endpoints.
 
 ---
 
