@@ -1,6 +1,12 @@
-# Metis — MedEd Platform
+<p align="center">
+  <img src=".github/metis-banner.svg" alt="Metis · five tools, one wisdom" width="100%"/>
+</p>
 
-**Unified portal and front door for the MedEd medical education suite.**
+# Metis
+
+**Unified Medical Education Platform** — Echo · Mneme · Syrinx · Oread · Athena
+
+> Unified portal and front door for the MedEd medical education suite.
 
 Metis (named after the Greek titaness of wisdom and counsel) is the hub of a six-service platform for primary care medical education across **Pediatrics**, **Internal Medicine**, and **Family Practice**.
 
