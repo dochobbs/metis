@@ -183,7 +183,7 @@ export default function ToolEmbed({ session }: ToolEmbedProps) {
       ) : (
         <iframe
           key={iframeKey}
-          src={`http://localhost:${tool.uiPort}`}
+          src={appPath}
           className="w-full h-full rounded-lg border border-gray-200"
           title={tool.name}
           sandbox="allow-scripts allow-forms allow-popups allow-downloads"
