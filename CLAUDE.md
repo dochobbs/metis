@@ -83,10 +83,12 @@ metis/
 |-------|-----------|---------------|
 | `/` | Dashboard | - |
 | `/login` | Login | - |
-| `/oread/*` | - | http://localhost:9104 |
-| `/syrinx/*` | - | http://localhost:9103 |
-| `/mneme/*` | - | http://localhost:9102 |
-| `/echo/*` | - | http://localhost:9101 |
+| `/tool/:toolId` | ToolEmbed | `/apps/{tool}/...` |
+| `/api/oread/*` | - | http://localhost:9104/api/* |
+| `/api/syrinx/*` | - | http://localhost:9103/api/* |
+| `/api/mneme/*` | - | http://localhost:9102/api/* |
+| `/api/echo/*` | - | http://localhost:9101/* |
+| `/api/athena/*` | - | http://localhost:9105/api/* |
 
 ### Vite Proxy Configuration (Updated February 2026)
 
@@ -96,6 +98,7 @@ metis/
 '/api/syrinx' → localhost:9103, rewrite to '/api'
 '/api/mneme'  → localhost:9102, rewrite to '/api'
 '/api/echo'   → localhost:9101, rewrite to ''     ← Echo has NO /api/ prefix
+'/apps/{tool}' → tool UI roots for iframe/new-tab use
 ```
 
 **Gotcha:** Echo routes (`/question`, `/feedback`, `/debrief`, `/health`) lack `/api/` prefix. The Echo proxy rewrites to `''` (empty string), not `'/api'`. All other services rewrite to `'/api'`.
@@ -243,8 +246,8 @@ else:
 ### Data Flow
 1. User logs into **Metis Portal** via Supabase
 2. Portal provides unified navigation to all tools
-3. JWT token passed to embedded tools
-4. Each tool validates against shared Supabase
+3. JWT token forwarded to backend API calls as `Authorization: Bearer <jwt>`
+4. Each backend must validate against shared Supabase
 5. Progress tracked in `progress_records` table
 
 ### Symlinks

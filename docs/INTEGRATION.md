@@ -60,8 +60,12 @@ All Dashboard API calls go through Vite's dev proxy on port 9100:
 | `/api/syrinx/patients/import` | `localhost:9103/api/patients/import` | Syrinx |
 | `/api/echo/question` | `localhost:9101/question` | Echo |
 | `/api/athena/conditions` | `localhost:9105/api/conditions` | Athena |
+| `/apps/oread/*` | `localhost:9104/*` | Oread UI |
+| `/apps/syrinx/*` | `localhost:9103/*` | Syrinx UI |
+| `/apps/mneme/*` | `localhost:5173/*` | Mneme frontend |
+| `/apps/echo/*` | `localhost:9101/*` | Echo UI |
 
-**Note:** Echo proxy strips to `''` because Echo routes have no `/api/` prefix. All other services rewrite to `/api`.
+**Note:** Echo API proxy strips to `''` because Echo routes have no `/api/` prefix. All other API services rewrite to `/api`. Browser code uses these same-origin routes instead of hardcoded `localhost` URLs.
 
 ---
 
@@ -214,7 +218,7 @@ curl -s -X POST http://localhost:9101/question \
 
 1. **Syrinx import is in-memory only.** Restart clears imported patients.
 2. **Mneme JSON import needs Supabase.** Without it, "Open in Mneme" fails silently.
-3. **No auth token forwarding from Metis.** Unauthenticated requests use `"metis-system"`.
+3. **Backend auth verification is still per-service work.** Metis forwards Supabase JWTs when a user is signed in, but each backend must verify the token and enforce authorization.
 4. **Echo case system is separate.** This integration uses `/question` for ad-hoc Q&A. Echo's full case system uses `/cases/start/dynamic`.
 5. **Athena fallback not yet wired.** AthenaClient is distributed but services don't yet call it at runtime (Plan 5 work).
 

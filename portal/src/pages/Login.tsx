@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { supabase, isAuthRequired, isSupabaseConfigured } from '../lib/supabase'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -38,6 +38,8 @@ export default function Login() {
   }
 
   if (!isSupabaseConfigured()) {
+    const authRequired = isAuthRequired()
+
     return (
       <div className="max-w-md mx-auto mt-16">
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
@@ -53,15 +55,18 @@ export default function Login() {
 VITE_SUPABASE_ANON_KEY=eyJ...`}
           </pre>
           <p className="text-amber-700 text-sm mt-4">
-            You can still use the platform without authentication - just click the
-            tool cards on the dashboard.
+            {authRequired
+              ? 'Authentication is required, so configure Supabase before using the dashboard.'
+              : 'You can still use the platform without authentication - just click the tool cards on the dashboard.'}
           </p>
-          <button
-            onClick={() => navigate('/')}
-            className="mt-4 text-amber-800 hover:text-amber-900 font-medium text-sm"
-          >
-            &larr; Back to Dashboard
-          </button>
+          {!authRequired && (
+            <button
+              onClick={() => navigate('/')}
+              className="mt-4 text-amber-800 hover:text-amber-900 font-medium text-sm"
+            >
+              &larr; Back to Dashboard
+            </button>
+          )}
         </div>
       </div>
     )

@@ -9,6 +9,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ## [Unreleased]
 
 ### Added
+- Portal deployment scaffold: `portal/Dockerfile`, `portal/nginx.conf`, and `deploy/Caddyfile`
+- Portal regression tests for same-origin gateway paths and auth headers
+- ESLint flat config and Vitest test runner
 - `scripts/e2e-smoke.sh` — end-to-end smoke test exercising the critical cross-service path (Athena → Oread → Mneme → Syrinx → Echo → Metis proxy). Read-mostly, jq-based, ~14 checks, exits non-zero on any failure. (W7.3 in BETA-WORKLIST.)
 - Public GitHub release of Metis at `dochobbs/metis`
 - Suite-level documentation set: README rewrite, `docs/INTEGRATION.md`, `docs/PLATFORM-DESIGN.md`, `docs/SERVICES.md`, `docs/ARCHITECTURE.md`, `docs/CURRICULUM.md`, `docs/ROADMAP.md`, `docs/MODEL-SYNC.md`, `docs/QUICKSTART.md`, `docs/GLOSSARY.md`, `docs/DEPLOYMENT.md`
@@ -17,6 +20,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ### Removed
 - Tracked `.DS_Store` files (now gitignored)
+
+### Security
+- Dashboard and embedded tool links now use same-origin `/api/*` and `/apps/*` gateway paths instead of browser-visible `localhost` service URLs
+- Supabase JWTs are forwarded to Metis-proxied backend API calls when a user is signed in
+- Tool iframes now use `sandbox` and `referrerPolicy`
+- `stop-all.sh` now stops PID/port-scoped Metis-managed services instead of broad process-name matches
+- Model sync code generation now validates Python identifiers/docstrings and `--validate` compares normalized generated output
 
 ---
 

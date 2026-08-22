@@ -13,8 +13,10 @@ Usage:
 """
 
 import argparse
+import difflib
 import json
-import os
+import keyword
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -53,6 +55,8 @@ TYPE_MAP = {
   "object": "dict",
 }
 
+GENERATED_AT_RE = re.compile(r"^Generated at: .*$", re.MULTILINE)
+
 
 def load_schemas(schemas_dir: Path) -> dict[str, dict]:
   """Load all JSON schemas from directory and merge definitions."""
@@ -67,13 +71,41 @@ def load_schemas(schemas_dir: Path) -> dict[str, dict]:
   return all_definitions
 
 
+def validate_python_identifier(name: str, context: str) -> None:
+  """Ensure a schema name can be emitted as a Python identifier."""
+  if not name.isidentifier() or keyword.iskeyword(name):
+    raise ValueError(f"Unsafe Python identifier for {context}: {name!r}")
+
+
+def validate_generated_text(text: str, context: str, *, allow_newline: bool = False) -> None:
+  """Reject text that can break generated Python comments or docstrings."""
+  if '"""' in text:
+    raise ValueError(f"Unsafe triple-quote sequence in {context}")
+  if "\r" in text:
+    raise ValueError(f"Unsafe carriage return in {context}")
+  if not allow_newline and "\n" in text:
+    raise ValueError(f"Unsafe newline in {context}")
+
+
+def literal_values(values: list[Any]) -> str:
+  """Render Python Literal string values safely."""
+  return ", ".join(repr(value) for value in values)
+
+
+def normalize_generated_content(content: str) -> str:
+  """Remove intentionally volatile fields before comparing generated files."""
+  return GENERATED_AT_RE.sub("Generated at: <normalized>", content).strip() + "\n"
+
+
 def resolve_ref(ref: str, definitions: dict) -> str:
   """Resolve a $ref to get the type name."""
   # Handle both local and cross-file references
   # "#/definitions/CodeableConcept" -> "CodeableConcept"
   # "clinical.schema.json#/definitions/Condition" -> "Condition"
   if "#/definitions/" in ref:
-    return ref.split("#/definitions/")[-1]
+    name = ref.split("#/definitions/")[-1]
+    validate_python_identifier(name, f"$ref {ref}")
+    return name
   return "Any"
 
 
@@ -101,19 +133,29 @@ def topological_sort(definitions: dict, requested: list[str]) -> list[str]:
   """Sort definitions so dependencies come before dependents."""
   # Build dependency graph for requested models
   graph = {}
-  all_needed = set(requested)
+  all_needed = []
+  seen = set()
+
+  def add_needed(name: str) -> None:
+    if name not in seen:
+      seen.add(name)
+      all_needed.append(name)
 
   # Find all transitive dependencies
-  to_process = list(requested)
+  to_process = []
+  for name in requested:
+    add_needed(name)
+    to_process.append(name)
+
   while to_process:
-    name = to_process.pop()
+    name = to_process.pop(0)
     if name not in definitions:
       continue
-    deps = get_dependencies(definitions[name], definitions)
+    deps = set(sorted(get_dependencies(definitions[name], definitions)))
     graph[name] = deps
-    for dep in deps:
-      if dep not in all_needed:
-        all_needed.add(dep)
+    for dep in sorted(deps):
+      if dep not in seen:
+        add_needed(dep)
         to_process.append(dep)
 
   # Topological sort using Kahn's algorithm
@@ -154,20 +196,21 @@ def json_type_to_python(prop: dict, definitions: dict) -> str:
     if prop.get("format") == "date":
       return "date"
     if "enum" in prop:
-      values = ", ".join(f'"{v}"' for v in prop["enum"])
-      return f"Literal[{values}]"
+      return f"Literal[{literal_values(prop['enum'])}]"
     if "const" in prop:
-      return f'Literal["{prop["const"]}"]'
+      return f"Literal[{repr(prop['const'])}]"
 
   return TYPE_MAP.get(json_type, "Any")
 
 
-def generate_enum_alias(name: str, definition: dict) -> str:
+def generate_enum_alias(name: str, definition: dict) -> str | None:
   """Generate a type alias for enum types."""
+  validate_python_identifier(name, "enum alias")
   if definition.get("type") == "string" and "enum" in definition:
-    values = ", ".join(f'"{v}"' for v in definition["enum"])
+    values = literal_values(definition["enum"])
     desc = definition.get("description", "")
     if desc:
+      validate_generated_text(desc, f"{name} description")
       return f'# {desc}\n{name} = Literal[{values}]'
     return f'{name} = Literal[{values}]'
   return None
@@ -175,12 +218,15 @@ def generate_enum_alias(name: str, definition: dict) -> str:
 
 def generate_model_code(name: str, definition: dict, definitions: dict) -> str:
   """Generate Pydantic model code from JSON Schema definition."""
+  validate_python_identifier(name, "model")
+
   # Handle pure enum types as type aliases
   if definition.get("type") == "string" and "enum" in definition:
     return generate_enum_alias(name, definition)
 
   lines = []
   description = definition.get("description", f"{name} model")
+  validate_generated_text(description, f"{name} description", allow_newline=True)
   lines.append(f'class {name}(BaseModel):')
   lines.append(f'  """{description}"""')
 
@@ -192,6 +238,7 @@ def generate_model_code(name: str, definition: dict, definitions: dict) -> str:
     return "\n".join(lines)
 
   for prop_name, prop_def in properties.items():
+    validate_python_identifier(prop_name, f"{name}.{prop_name}")
     python_type = json_type_to_python(prop_def, definitions)
     is_required = prop_name in required
 
@@ -200,13 +247,13 @@ def generate_model_code(name: str, definition: dict, definitions: dict) -> str:
 
     if is_required:
       if default is not None:
-        default_str = repr(default) if not isinstance(default, bool) else str(default)
+        default_str = repr(default)
         lines.append(f'  {prop_name}: {python_type} = {default_str}')
       else:
         lines.append(f'  {prop_name}: {python_type}')
     else:
       if default is not None:
-        default_str = repr(default) if not isinstance(default, bool) else str(default)
+        default_str = repr(default)
         lines.append(f'  {prop_name}: {python_type} | None = {default_str}')
       else:
         lines.append(f'  {prop_name}: {python_type} | None = None')
@@ -214,11 +261,10 @@ def generate_model_code(name: str, definition: dict, definitions: dict) -> str:
   return "\n".join(lines)
 
 
-def generate_file(project_name: str, models: list[str], definitions: dict,
-                  output_dir: Path, dry_run: bool = False) -> str:
-  """Generate Python file with all models for a project."""
-  timestamp = datetime.now().isoformat()
-
+def render_file_content(project_name: str, models: list[str], definitions: dict,
+                        timestamp: str | None = None) -> tuple[str, list[str]]:
+  """Render generated Python model file content."""
+  timestamp = timestamp or datetime.now().isoformat()
   # Sort models by dependency order
   sorted_models = topological_sort(definitions, models)
 
@@ -252,6 +298,23 @@ from pydantic import BaseModel
       print(f"  Warning: {model_name} not found in schemas")
 
   content = header + "\n\n".join(model_codes) + "\n"
+  return content, generated_names
+
+
+def render_init_content(generated_names: list[str]) -> str:
+  """Render generated package init content."""
+  names = ", ".join(generated_names)
+  return f'''"""Generated models from Metis sync."""
+from .context import {names}
+
+__all__ = {generated_names}
+'''
+
+
+def generate_file(project_name: str, models: list[str], definitions: dict,
+                  output_dir: Path, dry_run: bool = False) -> str:
+  """Generate Python file with all models for a project."""
+  content, generated_names = render_file_content(project_name, models, definitions)
 
   if dry_run:
     print(f"\n--- {project_name}: {output_dir}/context.py ---")
@@ -264,11 +327,7 @@ from pydantic import BaseModel
     print(f"  Generated {output_file}")
 
     # Create __init__.py
-    init_content = f'''"""Generated models from Metis sync."""
-from .context import {", ".join(generated_names)}
-
-__all__ = {generated_names}
-'''
+    init_content = render_init_content(generated_names)
     init_file = output_dir / "__init__.py"
     with open(init_file, "w") as f:
       f.write(init_content)
@@ -299,14 +358,27 @@ def validate_sync(definitions: dict) -> bool:
       all_valid = False
       continue
 
-    # Check all required models are present
-    missing = []
-    for model_name in config["models"]:
-      if f"class {model_name}(BaseModel)" not in content:
-        missing.append(model_name)
+    expected, _generated_names = render_file_content(
+      project_name,
+      config["models"],
+      definitions,
+      timestamp="<normalized>",
+    )
 
-    if missing:
-      print(f"  {project_name}: MISSING MODELS - {', '.join(missing)}")
+    actual_normalized = normalize_generated_content(content)
+    expected_normalized = normalize_generated_content(expected)
+
+    if actual_normalized != expected_normalized:
+      diff = "\n".join(difflib.unified_diff(
+        expected_normalized.splitlines(),
+        actual_normalized.splitlines(),
+        fromfile=f"expected:{project_name}/context.py",
+        tofile=f"actual:{project_name}/context.py",
+        lineterm="",
+      ))
+      print(f"  {project_name}: OUT OF SYNC")
+      if diff:
+        print("\n".join(f"    {line}" for line in diff.splitlines()[:40]))
       all_valid = False
     else:
       print(f"  {project_name}: OK")

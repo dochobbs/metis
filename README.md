@@ -123,7 +123,7 @@ Full reference: [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
 ## Vite Proxy
 
-All Dashboard API calls go through Vite's dev proxy on port 9100:
+All Dashboard API calls go through the Metis gateway path on port 9100 in development and should keep the same route shape in production:
 
 | Dashboard calls | Proxy rewrites to | Backend |
 |-----------------|-------------------|---------|
@@ -132,6 +132,10 @@ All Dashboard API calls go through Vite's dev proxy on port 9100:
 | `/api/mneme/...` | `localhost:9102/api/...` | Mneme |
 | `/api/echo/...` | `localhost:9101/...` | Echo |
 | `/api/athena/...` | `localhost:9105/api/...` | Athena |
+| `/apps/oread/...` | `localhost:9104/...` | Oread UI |
+| `/apps/syrinx/...` | `localhost:9103/...` | Syrinx UI |
+| `/apps/mneme/...` | `localhost:5173/...` | Mneme frontend |
+| `/apps/echo/...` | `localhost:9101/...` | Echo UI |
 
 **Gotcha:** Echo routes have **no** `/api/` prefix. The Echo proxy rewrites to `''` (empty string), not `'/api'`. All other services rewrite to `'/api'`.
 

@@ -1,66 +1,58 @@
 import { useParams, Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { Session } from '@supabase/supabase-js'
 import {
   User, Mic, FileText, MessageCircle,
   ArrowLeft, ExternalLink, RefreshCw,
   CircleDot, LucideIcon
 } from 'lucide-react'
+import {
+  getAuthHeaders,
+  getServiceApiPath,
+  getServiceAppPath,
+  serviceConfigs,
+  type ServiceConfig,
+  type ServiceId,
+} from '../lib/metisApi'
 
-interface ToolConfig {
-  name: string
-  greekName: string
-  healthPort: number
-  uiPort: number
-  color: string
+interface ToolConfig extends ServiceConfig {
+  id: Exclude<ServiceId, 'athena'>
   icon: LucideIcon
-  description: string
 }
 
-const toolConfigs: Record<string, ToolConfig> = {
+interface ToolEmbedProps {
+  session: Session | null
+}
+
+const toolConfigs: Record<Exclude<ServiceId, 'athena'>, ToolConfig> = {
   oread: {
-    name: 'Oread',
-    greekName: 'synpat',
-    healthPort: 9104,
-    uiPort: 9104,
-    color: 'emerald',
+    ...serviceConfigs.oread,
+    id: 'oread',
     icon: User,
-    description: 'Synthetic Patient Generator',
   },
   syrinx: {
-    name: 'Syrinx',
-    greekName: 'synvoice',
-    healthPort: 9103,
-    uiPort: 9103,
-    color: 'violet',
+    ...serviceConfigs.syrinx,
+    id: 'syrinx',
     icon: Mic,
-    description: 'Encounter Script Generator',
   },
   mneme: {
-    name: 'Mneme',
-    greekName: 'synchart',
-    healthPort: 9102,
-    uiPort: 5173,
-    color: 'amber',
+    ...serviceConfigs.mneme,
+    id: 'mneme',
     icon: FileText,
-    description: 'EMR Chart Review',
   },
   echo: {
-    name: 'Echo',
-    greekName: 'echo',
-    healthPort: 9101,
-    uiPort: 5000,
-    color: 'cyan',
+    ...serviceConfigs.echo,
+    id: 'echo',
     icon: MessageCircle,
-    description: 'AI Attending Tutor',
   },
 }
 
-export default function ToolEmbed() {
+export default function ToolEmbed({ session }: ToolEmbedProps) {
   const { toolId } = useParams<{ toolId: string }>()
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [iframeKey, setIframeKey] = useState(0)
 
-  const tool = toolId ? toolConfigs[toolId] : null
+  const tool = toolId && isToolId(toolId) ? toolConfigs[toolId] : null
 
   useEffect(() => {
     if (!tool) return
@@ -71,12 +63,14 @@ export default function ToolEmbed() {
         const timeout = setTimeout(() => controller.abort(), 3000)
 
         // Try /health first, then fallback to root
-        const response = await fetch(`http://localhost:${tool.healthPort}/health`, {
+        const response = await fetch(getServiceApiPath(tool.id, '/health'), {
           method: 'GET',
+          headers: getAuthHeaders(session),
           signal: controller.signal,
         }).catch(() =>
-          fetch(`http://localhost:${tool.healthPort}/`, {
+          fetch(getServiceApiPath(tool.id, '/'), {
             method: 'GET',
+            headers: getAuthHeaders(session),
             signal: controller.signal,
           })
         )
@@ -91,7 +85,7 @@ export default function ToolEmbed() {
     checkStatus()
     const interval = setInterval(checkStatus, 15000)
     return () => clearInterval(interval)
-  }, [tool])
+  }, [session, tool])
 
   if (!tool) {
     return (
@@ -116,6 +110,7 @@ export default function ToolEmbed() {
 
   const colors = getColorClasses(tool.color)
   const Icon = tool.icon
+  const appPath = getServiceAppPath(tool.id)
 
   const handleRefresh = () => {
     setIframeKey(prev => prev + 1)
@@ -150,7 +145,7 @@ export default function ToolEmbed() {
                 status === 'offline' ? 'text-red-500' : 'text-gray-400 animate-pulse'
               }`} />
               <span className="text-gray-600 capitalize">{status}</span>
-              <span className="text-gray-400">:{tool.healthPort}</span>
+              <span className="text-gray-400">:{tool.port}</span>
             </div>
             {/* Actions */}
             <button
@@ -161,7 +156,7 @@ export default function ToolEmbed() {
               <RefreshCw className="w-4 h-4 text-gray-600" />
             </button>
             <a
-              href={`http://localhost:${tool.uiPort}`}
+              href={appPath}
               target="_blank"
               rel="noopener noreferrer"
               className="p-2 hover:bg-white/50 rounded-lg transition-colors"
@@ -191,8 +186,14 @@ export default function ToolEmbed() {
           src={`http://localhost:${tool.uiPort}`}
           className="w-full h-full rounded-lg border border-gray-200"
           title={tool.name}
+          sandbox="allow-scripts allow-forms allow-popups allow-downloads"
+          referrerPolicy="strict-origin-when-cross-origin"
         />
       )}
     </div>
   )
+}
+
+function isToolId(toolId: string): toolId is Exclude<ServiceId, 'athena'> {
+  return toolId === 'oread' || toolId === 'syrinx' || toolId === 'mneme' || toolId === 'echo'
 }

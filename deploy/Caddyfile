@@ -1,0 +1,57 @@
+{
+  email {$ACME_EMAIL}
+}
+
+{$MEDED_HOSTNAME:localhost} {
+  encode zstd gzip
+
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy strict-origin-when-cross-origin
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  }
+
+  handle_path /api/echo/* {
+    reverse_proxy echo:9101
+  }
+
+  handle /api/oread/* {
+    uri replace /api/oread /api
+    reverse_proxy oread:9104
+  }
+
+  handle /api/syrinx/* {
+    uri replace /api/syrinx /api
+    reverse_proxy syrinx:9103
+  }
+
+  handle /api/mneme/* {
+    uri replace /api/mneme /api
+    reverse_proxy mneme:9102
+  }
+
+  handle /api/athena/* {
+    uri replace /api/athena /api
+    reverse_proxy athena:9105
+  }
+
+  handle_path /apps/oread/* {
+    reverse_proxy oread:9104
+  }
+
+  handle_path /apps/syrinx/* {
+    reverse_proxy syrinx:9103
+  }
+
+  handle_path /apps/mneme/* {
+    reverse_proxy mneme-frontend:5173
+  }
+
+  handle_path /apps/echo/* {
+    reverse_proxy echo:9101
+  }
+
+  handle {
+    reverse_proxy metis-portal:9100
+  }
+}

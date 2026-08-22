@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Session } from '@supabase/supabase-js'
 import { RefreshCw, Loader2 } from 'lucide-react'
+import {
+  getAuthHeaders,
+  getJsonHeaders,
+  getServiceApiPath,
+  getServiceAppPath,
+  orderedServices,
+  type ServiceConfig,
+  type ServiceId,
+} from '../lib/metisApi'
 
 interface DashboardProps {
   session: Session | null
@@ -8,7 +17,7 @@ interface DashboardProps {
 
 interface ServiceStatus {
   name: string
-  id: string
+  id: ServiceId
   port: number
   status: 'online' | 'offline' | 'checking'
   color: string
@@ -29,13 +38,7 @@ interface EchoMessage {
   content: string
 }
 
-const services: Omit<ServiceStatus, 'status'>[] = [
-  { name: 'Athena', id: 'athena', port: 9105, color: 'indigo' },
-  { name: 'Oread', id: 'oread', port: 9104, color: 'emerald' },
-  { name: 'Syrinx', id: 'syrinx', port: 9103, color: 'violet' },
-  { name: 'Mneme', id: 'mneme', port: 9102, color: 'amber' },
-  { name: 'Echo', id: 'echo', port: 9101, color: 'cyan' },
-]
+const services: ServiceConfig[] = orderedServices
 
 type Specialty = 'pediatrics' | 'internal_medicine' | 'family_practice'
 
@@ -69,7 +72,7 @@ const specialtyConfig = {
   },
 }
 
-export default function Dashboard({ session: _session }: DashboardProps) {
+export default function Dashboard({ session }: DashboardProps) {
   const [statuses, setStatuses] = useState<ServiceStatus[]>(
     services.map(s => ({ ...s, status: 'checking' }))
   )
@@ -92,7 +95,9 @@ export default function Dashboard({ session: _session }: DashboardProps) {
 
   // Fetch Athena knowledge stats
   useEffect(() => {
-    fetch('/api/athena/health')
+    fetch(getServiceApiPath('athena', '/health'), {
+      headers: getAuthHeaders(session),
+    })
       .then(r => {
         if (!r.ok) throw new Error(`Athena health ${r.status}`)
         return r.json()
@@ -102,11 +107,13 @@ export default function Dashboard({ session: _session }: DashboardProps) {
         setAthenaOnline(true)
       })
       .catch(() => setAthenaOnline(false))
-  }, [])
+  }, [session])
 
   // Update specialty condition counts from Athena
   useEffect(() => {
-    fetch(`/api/athena/conditions?specialty=${specialty}`)
+    fetch(`${getServiceApiPath('athena', '/conditions')}?specialty=${specialty}`, {
+      headers: getAuthHeaders(session),
+    })
       .then(r => r.ok ? r.json() : [])
       .then(data => {
         if (Array.isArray(data)) {
@@ -116,7 +123,7 @@ export default function Dashboard({ session: _session }: DashboardProps) {
       .catch(() => {
         // Athena offline indicator already set by health check
       })
-  }, [specialty])
+  }, [session, specialty])
 
   const checkStatuses = useCallback(async () => {
     // Per-service 2s timeout AND overall 3s budget — prevents one hung service
@@ -129,10 +136,13 @@ export default function Dashboard({ session: _session }: DashboardProps) {
         try {
           const controller = new AbortController()
           const timeout = setTimeout(() => controller.abort(), 2000)
-          const healthPath = service.id === 'athena' ? '/api/health' : '/health'
-          const res = await fetch(`http://localhost:${service.port}${healthPath}`, {
+          const res = await fetch(getServiceApiPath(service.id, '/health'), {
+            headers: getAuthHeaders(session),
             signal: controller.signal,
-          }).catch(() => fetch(`http://localhost:${service.port}/`))
+          }).catch(() => fetch(getServiceApiPath(service.id, '/'), {
+            headers: getAuthHeaders(session),
+            signal: controller.signal,
+          }))
           clearTimeout(timeout)
           return { ...service, status: res?.ok ? 'online' : 'offline' } as ServiceStatus
         } catch {
@@ -142,7 +152,7 @@ export default function Dashboard({ session: _session }: DashboardProps) {
     )
     const updated = await Promise.race([probes, overallBudget])
     setStatuses(updated)
-  }, [])
+  }, [session])
 
   useEffect(() => {
     checkStatuses()
@@ -163,7 +173,7 @@ export default function Dashboard({ session: _session }: DashboardProps) {
       const ageMonths = parseInt(patientAge)
       const res = await fetch('/api/oread/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getJsonHeaders(session),
         body: JSON.stringify({ age_months: ageMonths, specialty }),
       })
       if (!res.ok) throw new Error('Generation failed')
@@ -189,12 +199,15 @@ export default function Dashboard({ session: _session }: DashboardProps) {
     setIsSendingMneme(true)
     setMnemeError(null)
     try {
-      const patientRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}?format=json`)
+      const patientRes = await fetch(
+        `${getServiceApiPath('oread', `/patients/${generatedPatient.patient_id}`)}?format=json`,
+        { headers: getAuthHeaders(session) }
+      )
       if (!patientRes.ok) throw new Error(`Oread fetch failed (${patientRes.status})`)
       const patientData = await patientRes.json()
-      const importRes = await fetch('/api/mneme/import/oread/json', {
+      const importRes = await fetch(getServiceApiPath('mneme', '/import/oread/json'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getJsonHeaders(session),
         body: JSON.stringify(patientData),
       })
       if (!importRes.ok) {
@@ -203,7 +216,7 @@ export default function Dashboard({ session: _session }: DashboardProps) {
       }
       const result = await importRes.json()
       const mnemePatientId = result.details?.patient_id
-      window.open(mnemePatientId ? `http://localhost:5173/patients/${mnemePatientId}` : 'http://localhost:5173', '_blank')
+      window.open(mnemePatientId ? getServiceAppPath('mneme', `/patients/${mnemePatientId}`) : getServiceAppPath('mneme'), '_blank')
     } catch (err) {
       setMnemeError(err instanceof Error ? err.message : 'Mneme import failed')
     } finally {
@@ -216,19 +229,22 @@ export default function Dashboard({ session: _session }: DashboardProps) {
     setIsSendingSyrinx(true)
     setSyrinxError(null)
     try {
-      const patientRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}?format=json`)
+      const patientRes = await fetch(
+        `${getServiceApiPath('oread', `/patients/${generatedPatient.patient_id}`)}?format=json`,
+        { headers: getAuthHeaders(session) }
+      )
       if (!patientRes.ok) throw new Error(`Oread fetch failed (${patientRes.status})`)
       const patientData = await patientRes.json()
-      const importRes = await fetch('/api/syrinx/patients/import', {
+      const importRes = await fetch(getServiceApiPath('syrinx', '/patients/import'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getJsonHeaders(session),
         body: JSON.stringify(patientData),
       })
       if (!importRes.ok) {
         const detail = await importRes.text().catch(() => '')
         throw new Error(`Syrinx import failed (${importRes.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`)
       }
-      window.open('http://localhost:9103', '_blank')
+      window.open(getServiceAppPath('syrinx'), '_blank')
     } catch (err) {
       setSyrinxError(err instanceof Error ? err.message : 'Syrinx send failed')
     } finally {
@@ -246,7 +262,10 @@ export default function Dashboard({ session: _session }: DashboardProps) {
       const payload: Record<string, unknown> = { learner_question: userMessage, learner_level: learnerLevel }
       if (generatedPatient) {
         try {
-          const ctxRes = await fetch(`/api/oread/patients/${generatedPatient.patient_id}/context`)
+          const ctxRes = await fetch(
+            getServiceApiPath('oread', `/patients/${generatedPatient.patient_id}/context`),
+            { headers: getAuthHeaders(session) }
+          )
           if (ctxRes.ok) { payload.patient = await ctxRes.json() }
         } catch {
           payload.patient = {
@@ -256,8 +275,8 @@ export default function Dashboard({ session: _session }: DashboardProps) {
           }
         }
       }
-      const res = await fetch('/api/echo/question', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      const res = await fetch(getServiceApiPath('echo', '/question'), {
+        method: 'POST', headers: getJsonHeaders(session), body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error('Echo request failed')
       const data = await res.json()
@@ -285,7 +304,7 @@ export default function Dashboard({ session: _session }: DashboardProps) {
         <div className="flex items-center gap-4">
           {statuses.map(s => (
             <a key={s.id}
-              href={`http://localhost:${s.id === 'mneme' ? 5173 : s.port}`}
+              href={s.id === 'athena' ? getServiceApiPath('athena', '/health') : getServiceAppPath(s.id)}
               target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 group"
             >
@@ -405,7 +424,7 @@ export default function Dashboard({ session: _session }: DashboardProps) {
                   className="text-[10px] text-stone-400 hover:text-stone-700 tracking-[0.15em] uppercase transition-colors disabled:opacity-40">
                   {isSendingSyrinx ? '...' : 'VOICE →'}
                 </button>
-                <a href={`http://localhost:9104/patients/${generatedPatient.patient_id}`}
+                <a href={getServiceAppPath('oread', `/patients/${generatedPatient.patient_id}`)}
                   target="_blank" rel="noopener noreferrer"
                   className="text-[10px] text-stone-400 hover:text-stone-700 tracking-[0.15em] uppercase transition-colors">
                   EXPORT →

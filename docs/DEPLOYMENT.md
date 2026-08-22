@@ -1,6 +1,6 @@
 # Deployment
 
-**Honest status: the MedEd suite is currently dev-only.** There is no production deployment, no CI/CD, no hosting. All documentation up to this point assumes `localhost` on a developer machine.
+**Honest status: Metis now has deployment scaffolding, but the full MedEd suite is not hosted yet.** The portal can be built as a static container and `deploy/Caddyfile` defines the suite gateway paths. The remaining work is wiring the sibling service containers, secrets, backend JWT verification, observability, and CI/CD in the deployment target.
 
 This page outlines what production deployment would look like and what's still missing.
 
@@ -9,13 +9,18 @@ This page outlines what production deployment would look like and what's still m
 ## Current state
 
 - Services run locally via `metis/scripts/start-all.sh`
-- All ports are `localhost`-bound (9100-9105, plus Mneme frontend at 5173)
+- Local development still uses ports 9100-9105, plus Mneme frontend at 5173
+- Browser-facing Metis code now uses same-origin gateway paths:
+  - `/api/{service}/...` for service APIs
+  - `/apps/{service}/...` for embedded tool UIs
+- `portal/Dockerfile` builds the Metis React app into an nginx container
+- `deploy/Caddyfile` defines the production gateway route shape for APIs and app embeds
 - Supabase is hosted (managed Postgres), but each developer uses their own project
 - Anthropic, ElevenLabs, Deepgram API keys live in each developer's `~/.zshrc`
-- No reverse proxy, TLS termination, secrets management, or observability stack
-- No container images, no Helm charts, no Terraform
+- No live hosted deployment, central secrets management, observability stack, Helm charts, or Terraform
+- Per-service backend Dockerfiles are still needed outside this repo
 
-If you want to demo MedEd to someone, **screen-share** is the path today.
+If you want to demo MedEd to someone today, **screen-share or a single-host deployment using the provided Caddy route shape** is the practical path.
 
 ---
 
@@ -36,7 +41,7 @@ Smallest viable footprint: everything on one platform (Fly or Railway) sharing a
 
 ### Containerization
 
-None of the services have Dockerfiles yet. A first pass:
+Metis has a portal Dockerfile at `portal/Dockerfile`. The sibling services still need Dockerfiles. A first pass for a FastAPI service:
 
 ```dockerfile
 # Example: athena/Dockerfile
@@ -52,22 +57,24 @@ Per-service Dockerfiles + a top-level `docker-compose.yml` would let one command
 
 ### Reverse proxy
 
-The Vite dev proxy that fans `/api/{service}/...` out to backends only exists in dev. Production needs a real reverse proxy:
+The Vite dev proxy and `deploy/Caddyfile` expose the same public path contract. Production should preserve this route shape so the browser never calls service-local ports directly:
 
 - **Caddy** — easiest TLS, simple config, good fit
 - **nginx** — more familiar, more config
 - **Cloudflare Workers + per-service routes** — if backends are on different hosts
 
-Sketch (Caddy):
+Route shape:
 
-```caddy
+```text
 meded.example.com {
-  reverse_proxy /api/echo/*   echo-svc:9101
-  reverse_proxy /api/mneme/*  mneme-svc:9102
-  reverse_proxy /api/syrinx/* syrinx-svc:9103
-  reverse_proxy /api/oread/*  oread-svc:9104
-  reverse_proxy /api/athena/* athena-svc:9105
-  reverse_proxy /*             portal-svc:9100
+  # See deploy/Caddyfile for the full rewrite rules.
+  /api/echo/*    -> echo:9101/*
+  /api/mneme/*   -> mneme:9102/api/*
+  /api/syrinx/*  -> syrinx:9103/api/*
+  /api/oread/*   -> oread:9104/api/*
+  /api/athena/*  -> athena:9105/api/*
+  /apps/mneme/*  -> mneme-frontend:5173/*
+  /apps/{tool}/* -> tool UI root
 }
 ```
 
@@ -90,7 +97,8 @@ The portal uses Supabase Auth today. For production:
 
 - Configure Supabase RLS policies for `progress_records` and Mneme tables
 - Set up email/OAuth providers in Supabase
-- Forward Supabase JWT to backends; backends verify (currently they trust the proxy)
+- Metis forwards Supabase JWTs to proxied backend API calls as `Authorization: Bearer <jwt>`
+- Backends must verify JWTs and enforce per-user/per-program authorization before multi-user deployment
 - Add per-program tenant isolation (not yet built)
 
 ### Observability
@@ -142,12 +150,12 @@ A 4 GB VPS handles this easily for a few dozen concurrent learners. Cost: ~$20/m
 
 In rough order:
 
-1. **Dockerfiles** per service (~1 day)
+1. **Dockerfiles** for sibling services (~1 day)
 2. **`docker-compose.yml`** for the suite (~half day)
-3. **Reverse-proxy config** + TLS (~half day)
+3. **TLS + DNS around `deploy/Caddyfile`** (~half day)
 4. **Secrets management** decision and rollout (~1 day)
-5. **CI** for lint/test on each repo (~1 day per repo, parallelizable)
-6. **Auth hardening** — JWT validation in backends, RLS in Supabase (~2-3 days)
+5. **CI** for lint/test/audit on each repo (~1 day per repo, parallelizable)
+6. **Backend auth hardening** — JWT validation in backends, RLS in Supabase (~2-3 days)
 7. **Tenant isolation** — per-program scoping for multi-school use (multi-week, not blocking single-tenant deploy)
 
 For a single-tenant demo, items 1-4 are enough. Multi-tenant production needs all of them.

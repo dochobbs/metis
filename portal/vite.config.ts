@@ -37,6 +37,28 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/athena/, '/api'),
       },
+      // Tool UI routes. Production should expose the same /apps/{service}/ paths
+      // from the reverse proxy so browser code never calls localhost ports directly.
+      '/apps/oread': {
+        target: 'http://localhost:9104',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/apps\/oread/, '') || '/',
+      },
+      '/apps/syrinx': {
+        target: 'http://localhost:9103',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/apps\/syrinx/, '') || '/',
+      },
+      '/apps/mneme': {
+        target: 'http://localhost:5173',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/apps\/mneme/, '') || '/',
+      },
+      '/apps/echo': {
+        target: 'http://localhost:9101',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/apps\/echo/, '') || '/',
+      },
     },
   },
 })

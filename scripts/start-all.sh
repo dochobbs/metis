@@ -4,7 +4,7 @@
 #
 # Usage: ./start-all.sh
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MEDED_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
@@ -30,9 +30,11 @@ start_service() {
     source venv/bin/activate
   fi
 
-  # Start in background
+  # Start in background and keep a narrow PID file for stop-all.sh.
   nohup $cmd > "/tmp/meded-$name.log" 2>&1 &
-  echo "  PID: $! (log: /tmp/meded-$name.log)"
+  local pid=$!
+  echo "$pid" > "/tmp/meded-$name.pid"
+  echo "  PID: $pid (log: /tmp/meded-$name.log)"
 }
 
 # Function to start npm service
@@ -44,7 +46,9 @@ start_npm() {
   echo "Starting $name on port $port..."
   cd "$MEDED_DIR/$dir"
   nohup npm run dev > "/tmp/meded-$name.log" 2>&1 &
-  echo "  PID: $! (log: /tmp/meded-$name.log)"
+  local pid=$!
+  echo "$pid" > "/tmp/meded-$name.pid"
+  echo "  PID: $pid (log: /tmp/meded-$name.log)"
 }
 
 # Start Python backends (new port scheme: 9101-9105)
