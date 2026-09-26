@@ -18,7 +18,7 @@ Named after Metis, Greek goddess of wisdom and counsel.
 
 ```bash
 # Start all services
-cd /Users/dochobbs/Downloads/Consult/MedEd/metis/scripts
+cd /Users/dochobbs/consult/MedEd/metis/scripts
 ./start-all.sh
 
 # Portal at http://localhost:9100

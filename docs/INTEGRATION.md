@@ -105,7 +105,7 @@ Athena resolves knowledge by specialty:
 Start all services:
 
 ```bash
-cd /Users/dochobbs/Downloads/Consult/MedEd/metis/scripts
+cd /Users/dochobbs/consult/MedEd/metis/scripts
 ./start-all.sh
 ./status.sh
 
@@ -117,7 +117,7 @@ Or start individually:
 
 ```bash
 # Terminal 1 - Athena (start first — knowledge source)
-cd /Users/dochobbs/Downloads/Consult/MedEd
+cd /Users/dochobbs/consult/MedEd
 source athena/.venv/bin/activate
 PYTHONPATH=. uvicorn athena.src.main:app --port 9105
 
